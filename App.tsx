@@ -4,6 +4,7 @@ import { PaperProvider, IconButton } from 'react-native-paper';
 import { NavigationContainer, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { StatusBar } from 'expo-status-bar';
 import { theme } from './src/theme/theme';
 import { initDatabase } from './src/db/database';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +24,7 @@ import SearchScreen from './src/screens/SearchScreen';
 import StatsScreen from './src/screens/StatsScreen';
 import ManualAddScreen from './src/screens/ManualAddScreen';
 import SrsReviewScreen from './src/screens/SrsReviewScreen';
+import MasteryListScreen from './src/screens/MasteryListScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createMaterialTopTabNavigator();
@@ -100,6 +102,7 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider>
                 <PaperProvider theme={theme}>
+                    <StatusBar style="dark" />
                     <NavigationContainer>
                         <Stack.Navigator id="RootStack">
                             <Stack.Screen
@@ -136,6 +139,7 @@ export default function App() {
                             <Stack.Screen name="Search" component={SearchScreen} options={{ title: '全局搜索' }} />
                             <Stack.Screen name="ManualAdd" component={ManualAddScreen} options={{ title: '手动添加题目' }} />
                             <Stack.Screen name="SrsReview" component={SrsReviewScreen} options={{ title: '今日复习' }} />
+                            <Stack.Screen name="MasteryList" component={MasteryListScreen} options={({ route }: any) => ({ title: route.params?.bankName || '掌握清单' })} />
                         </Stack.Navigator>
                     </NavigationContainer>
                 </PaperProvider>

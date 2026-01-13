@@ -29,7 +29,28 @@ export const useQuiz = () => {
     const [autoSkipMode, setAutoSkipMode] = useState<AutoSkipMode>('off');
     const [autoRemoveMistake, setAutoRemoveMistake] = useState(true);
 
-    const SRS_INTERVALS = [0, 1, 3, 7, 15, 30, 90]; // Days for each mastery level
+    const SRS_INTERVALS = [0, 1, 3, 7, 15, 30, 60, 120]; // Scientific intervals (Days)
+
+    const saveSession = useCallback(async (index: number, history: Map<number, any>, order?: number[]) => {
+        if (!bankId || customQuestions) return;
+        const db = getDB();
+        try {
+            const historyStr = JSON.stringify(Array.from(history.entries()));
+            const orderStr = order ? JSON.stringify(order) : null;
+            await db.runAsync(
+                `INSERT INTO quiz_sessions (bank_id, quiz_mode, current_index, answer_history, question_order) 
+                 VALUES (?, ?, ?, ?, ?) 
+                 ON CONFLICT(bank_id, quiz_mode) DO UPDATE SET 
+                    current_index = ?, 
+                    answer_history = ?, 
+                    question_order = COALESCE(?, question_order)`,
+                bankId, quizMode, index, historyStr, orderStr,
+                index, historyStr, orderStr
+            );
+        } catch (e) {
+            console.error('Failed to save session:', e);
+        }
+    }, [bankId, quizMode, customQuestions]);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -83,18 +104,64 @@ export const useQuiz = () => {
                 result = await db.getAllAsync<Question>(query, ...params);
             }
 
-            // Shuffle if in practice mode
-            if (quizMode === 'practice' && result.length > 0) {
-                result = result.sort(() => Math.random() - 0.5);
+            // 3. Load Session
+            let savedIndex = 0;
+            let savedHistory = new Map();
+            const session: any = await db.getFirstAsync(
+                'SELECT * FROM quiz_sessions WHERE bank_id = ? AND quiz_mode = ?',
+                bankId, quizMode
+            );
+
+            if (bankId && !customQuestions && session) {
+                savedIndex = session.current_index || 0;
+                if (session.answer_history) {
+                    try {
+                        const entries = JSON.parse(session.answer_history);
+                        savedHistory = new Map(entries);
+                    } catch (e) { console.error('Parse history error', e); }
+                }
+                if (session.question_order) {
+                    try {
+                        const orderIds = JSON.parse(session.question_order);
+                        const orderedResult: Question[] = [];
+                        orderIds.forEach((id: number) => {
+                            const q = result.find(item => item.id === id);
+                            if (q) orderedResult.push(q);
+                        });
+                        // Append any new questions not in the saved order
+                        result.forEach(q => {
+                            if (!orderIds.includes(q.id)) orderedResult.push(q);
+                        });
+                        result = orderedResult;
+                    } catch (e) { console.error('Parse order error', e); }
+                }
+            }
+
+            // 4. Handle initial order save for new sessions
+            if (result.length > 0 && !session && bankId && !customQuestions) {
+                if (quizMode === 'practice') {
+                    result = result.sort(() => Math.random() - 0.5);
+                }
+                const orderIds = result.map(q => q.id);
+                await saveSession(0, new Map(), orderIds);
             }
 
             setQuestions(result);
+            setCurrentIndex(savedIndex);
+            setAnswerHistory(savedHistory);
+
+            const initialHistory = savedHistory.get(savedIndex);
+            if (initialHistory) {
+                setSelectedAnswer(initialHistory.selectedAnswer || null);
+                setShowResult(initialHistory.showResult || false);
+                setIsCorrect(initialHistory.isCorrect || false);
+            }
         } catch (e) {
             console.error('Failed to load quiz data:', e);
         } finally {
             setLoading(false);
         }
-    }, [bankId, mode, customQuestions, questionType, quizMode]);
+    }, [bankId, mode, customQuestions, questionType, quizMode, saveSession]);
 
     useEffect(() => {
         loadData();
@@ -112,7 +179,10 @@ export const useQuiz = () => {
             if (isCorrect) {
                 level = Math.min(level + 1, SRS_INTERVALS.length - 1);
             } else {
-                level = Math.max(0, level - 1);
+                // Scientific Lapse Logic:
+                // If the user fails at a high level (>3), reset to level 1 to re-learn.
+                // If they fail at a low level, reset to level 0.
+                level = level > 3 ? 1 : 0;
             }
 
             const nextReview = new Date();
@@ -148,10 +218,11 @@ export const useQuiz = () => {
             setSelectedAnswer(history?.selectedAnswer || null);
             setShowResult(history?.showResult || false);
             setIsCorrect(history?.isCorrect || false);
+            saveSession(nextIndex, answerHistory);
         } else {
             setCompleted(true);
         }
-    }, [currentIndex, questions.length, answerHistory]);
+    }, [currentIndex, questions.length, answerHistory, saveSession]);
 
     const handlePrev = useCallback(() => {
         if (currentIndex > 0) {
@@ -162,8 +233,9 @@ export const useQuiz = () => {
             setSelectedAnswer(history?.selectedAnswer || null);
             setShowResult(history?.showResult || false);
             setIsCorrect(history?.isCorrect || false);
+            saveSession(prevIndex, answerHistory);
         }
-    }, [currentIndex, answerHistory]);
+    }, [currentIndex, answerHistory, saveSession]);
 
     const jumpToIndex = (index: number) => {
         if (index >= 0 && index < questions.length) {
@@ -172,6 +244,7 @@ export const useQuiz = () => {
             setSelectedAnswer(history?.selectedAnswer || null);
             setShowResult(history?.showResult || false);
             setIsCorrect(history?.isCorrect || false);
+            saveSession(index, answerHistory);
         }
     };
 
@@ -198,11 +271,10 @@ export const useQuiz = () => {
             setShowResult(true);
         }
 
-        setAnswerHistory(prev => {
-            const next = new Map(prev);
-            next.set(index, { selectedAnswer: answer, isCorrect: correct, showResult: true });
-            return next;
-        });
+        const newHistory = new Map(answerHistory);
+        newHistory.set(index, { selectedAnswer: answer, isCorrect: correct, showResult: true });
+        setAnswerHistory(newHistory);
+        saveSession(currentIndex, newHistory);
 
         try {
             const db = getDB();
@@ -225,7 +297,7 @@ export const useQuiz = () => {
         } catch (e) {
             console.error('Failed to save progress:', e);
         }
-    }, [questions, currentIndex, autoSkipMode, handleNext]);
+    }, [questions, currentIndex, autoSkipMode, handleNext, answerHistory, saveSession]);
 
     const submitAnswer = useCallback(async (index: number, answer: any) => {
         // Multi-choice shouldn't check immediately unless specifically submitted
@@ -233,12 +305,11 @@ export const useQuiz = () => {
         if (!q) return;
 
         if (q.type === 'multi') {
-            // Just update history without showing result yet
-            setAnswerHistory(prev => {
-                const next = new Map(prev);
-                next.set(index, { selectedAnswer: answer, isCorrect: false, showResult: false });
-                return next;
-            });
+            const newHistory = new Map(answerHistory);
+            newHistory.set(index, { selectedAnswer: answer, isCorrect: false, showResult: false });
+            setAnswerHistory(newHistory);
+            saveSession(currentIndex, newHistory);
+
             if (index === currentIndex) {
                 setSelectedAnswer(answer);
             }
@@ -246,7 +317,7 @@ export const useQuiz = () => {
             // Single choice, true/false, short, fill usually immediate or semi-immediate
             await checkAnswerInternal(index, answer);
         }
-    }, [questions, currentIndex, checkAnswerInternal]);
+    }, [questions, currentIndex, checkAnswerInternal, answerHistory, saveSession]);
 
     const checkAnswer = useCallback(async () => {
         await checkAnswerInternal(currentIndex, selectedAnswer);

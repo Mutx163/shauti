@@ -97,13 +97,20 @@ export default function SrsReviewScreen() {
                 ListHeaderComponent={renderHeader}
                 renderItem={({ item }) => (
                     <Card style={styles.bankCard} mode="elevated">
-                        <Card.Content>
-                            <View style={styles.bankHeader}>
+                        <Card.Content style={{ padding: 16 }}>
+                            {/* 头部区域 - 圆角卡片 */}
+                            <View style={[styles.cardHeader, { backgroundColor: theme.colors.tertiaryContainer }]}>
                                 <View style={{ flex: 1 }}>
-                                    <Text variant="titleMedium">{item.bankName}</Text>
-                                    <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 4, fontWeight: 'bold' }}>
-                                        待复习：{item.dueCount}
+                                    <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onTertiaryContainer }}>
+                                        {item.bankName}
                                     </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                                        <View style={[styles.badge, { backgroundColor: theme.colors.errorContainer }]}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold' }}>
+                                                ⏰ 待复习 {item.dueCount} 道
+                                            </Text>
+                                        </View>
+                                    </View>
                                 </View>
                                 <Button
                                     mode="contained"
@@ -112,20 +119,32 @@ export default function SrsReviewScreen() {
                                         bankId: item.bankId,
                                         bankName: item.bankName
                                     })}
-                                    compact
+                                    icon="pencil"
+                                    buttonColor={theme.colors.primary}
+                                    style={{ borderRadius: 20 }}
                                 >
                                     去复习
                                 </Button>
                             </View>
-                            <Divider style={{ marginVertical: 12 }} />
-                            {item.previewQuestions.map((q, index) => (
-                                <View key={q.id} style={styles.previewItem}>
-                                    <Text variant="bodySmall" style={{ color: 'gray' }}>
-                                        {index + 1}.
-                                    </Text>
-                                    <MathText content={q.content} fontSize={13} color="#666" />
-                                </View>
-                            ))}
+
+                            {/* 题目预览区域 */}
+                            <View style={{ marginTop: 16 }}>
+                                <Text variant="labelMedium" style={{ color: theme.colors.primary, marginBottom: 12, fontWeight: 'bold' }}>
+                                    📝 题目预览
+                                </Text>
+                                {item.previewQuestions.map((q, index) => (
+                                    <View key={q.id} style={styles.questionPreview}>
+                                        <View style={[styles.indexBadge, { backgroundColor: theme.colors.secondaryContainer }]}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSecondaryContainer, fontWeight: 'bold' }}>
+                                                {index + 1}
+                                            </Text>
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <MathText content={q.content} fontSize={14} color={theme.colors.onSurface} />
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
                         </Card.Content>
                     </Card>
                 )}
@@ -143,8 +162,42 @@ export default function SrsReviewScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     headerRow: { flexDirection: 'row', alignItems: 'center' },
-    bankCard: { marginBottom: 16, borderRadius: 16 },
+    bankCard: {
+        marginBottom: 16,
+        borderRadius: 16,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        overflow: 'hidden',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        borderRadius: 12,
+    },
     bankHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    badge: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    questionPreview: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 12,
+        gap: 10,
+    },
+    indexBadge: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     previewItem: { flexDirection: 'row', marginTop: 8, gap: 8 },
     emptyContainer: { marginTop: 100, alignItems: 'center', opacity: 0.5 },
 });

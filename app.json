@@ -16,17 +16,29 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.cursor.stt",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "statusBar": {
+        "barStyle": "dark-content",
+        "backgroundColor": "#ffffff"
+      },
+      "enableProguardInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6b418b14-3de5-489a-96ce-12853117ee92"
+      }
+    }
   }
 }

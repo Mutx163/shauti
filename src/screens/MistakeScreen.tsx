@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList } from 'react-native';
-import { Text, Card, Button, useTheme, Divider, Avatar, IconButton } from 'react-native-paper'; // Added Avatar, IconButton
+import { View, StyleSheet, FlatList, Alert } from 'react-native';
+import { Text, Card, Button, useTheme, Divider, Avatar, IconButton, Portal, Dialog } from 'react-native-paper';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getDB, Question } from '../db/database';
 import MathText from '../components/MathText';
@@ -16,6 +16,8 @@ export default function MistakeScreen() {
     const theme = useTheme();
     const isFocused = useIsFocused();
     const [groupedMistakes, setGroupedMistakes] = useState<MistakeByBank[]>([]);
+    const [clearAllDialog, setClearAllDialog] = useState(false);
+    const [clearBankDialog, setClearBankDialog] = useState<number | null>(null);
 
     useEffect(() => {
         if (isFocused) {
@@ -61,6 +63,49 @@ export default function MistakeScreen() {
         }
     };
 
+    // 清空所有错题
+    const clearAllMistakes = async () => {
+        try {
+            const db = getDB();
+            // 为所有错题添加一条正确的记录，将其从错题本移除
+            await db.runAsync(
+                `INSERT INTO user_progress (question_id, is_correct, timestamp)
+                 SELECT DISTINCT up.question_id, 1, datetime('now')
+                 FROM user_progress up
+                 WHERE up.is_correct = 0
+                 AND up.id = (SELECT id FROM user_progress WHERE question_id = up.question_id ORDER BY timestamp DESC LIMIT 1)`
+            );
+            setClearAllDialog(false);
+            loadMistakes();
+        } catch (error) {
+            console.error('Failed to clear all mistakes:', error);
+            Alert.alert('错误', '清空失败，请重试');
+        }
+    };
+
+    // 清空指定题库的错题
+    const clearBankMistakes = async (bankId: number) => {
+        try {
+            const db = getDB();
+            // 为该题库的所有错题添加正确记录
+            await db.runAsync(
+                `INSERT INTO user_progress (question_id, is_correct, timestamp)
+                 SELECT DISTINCT up.question_id, 1, datetime('now')
+                 FROM user_progress up
+                 JOIN questions q ON up.question_id = q.id
+                 WHERE q.bank_id = ?
+                 AND up.is_correct = 0
+                 AND up.id = (SELECT id FROM user_progress WHERE question_id = up.question_id ORDER BY timestamp DESC LIMIT 1)`,
+                bankId
+            );
+            setClearBankDialog(null);
+            loadMistakes();
+        } catch (error) {
+            console.error('Failed to clear bank mistakes:', error);
+            Alert.alert('错误', '清空失败，请重试');
+        }
+    };
+
     const renderHeader = () => (
         <View style={{ marginBottom: 24 }}>
             <Card
@@ -78,10 +123,23 @@ export default function MistakeScreen() {
                 />
             </Card>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>错题专项复习</Text>
-                {groupedMistakes.length === 0 && (
-                    <Text variant="bodySmall" style={{ color: 'gray', marginLeft: 8 }}>暂无错题</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>错题专项复习</Text>
+                    {groupedMistakes.length === 0 && (
+                        <Text variant="bodySmall" style={{ color: 'gray', marginLeft: 8 }}>暂无错题</Text>
+                    )}
+                </View>
+                {groupedMistakes.length > 0 && (
+                    <Button
+                        mode="text"
+                        onPress={() => setClearAllDialog(true)}
+                        icon="delete-sweep"
+                        textColor={theme.colors.error}
+                        compact
+                    >
+                        清空全部
+                    </Button>
                 )}
             </View>
         </View>
@@ -96,44 +154,109 @@ export default function MistakeScreen() {
                 ListHeaderComponent={renderHeader}
                 renderItem={({ item }) => (
                     <Card style={styles.bankCard} mode="elevated">
-                        <Card.Content>
-                            <View style={styles.bankHeader}>
+                        <Card.Content style={{ padding: 16 }}>
+                            {/* 头部区域 - 圆角卡片 */}
+                            <View style={[styles.cardHeader, { backgroundColor: theme.colors.primaryContainer }]}>
                                 <View style={{ flex: 1 }}>
-                                    <Text variant="titleMedium">{item.bankName}</Text>
-                                    <Text variant="bodySmall" style={{ color: 'gray', marginTop: 4 }}>
-                                        错题数：{item.mistakes.length}
+                                    <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                        {item.bankName}
                                     </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                                        <View style={[styles.badge, { backgroundColor: theme.colors.errorContainer }]}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold' }}>
+                                                {item.mistakes.length} 道错题
+                                            </Text>
+                                        </View>
+                                    </View>
                                 </View>
-                                <Button
-                                    mode="contained"
-                                    onPress={() => navigation.navigate('Quiz', {
-                                        mode: 'mistake',
-                                        bankId: item.bankId,
-                                        bankName: item.bankName
-                                    })}
-                                    compact
-                                >
-                                    开始复习
-                                </Button>
+                                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                                    <IconButton
+                                        icon="delete-outline"
+                                        size={22}
+                                        onPress={() => setClearBankDialog(item.bankId)}
+                                        iconColor={theme.colors.error}
+                                        style={{ margin: 0, backgroundColor: theme.colors.surface }}
+                                    />
+                                    <Button
+                                        mode="contained"
+                                        onPress={() => navigation.navigate('Quiz', {
+                                            mode: 'mistake',
+                                            bankId: item.bankId,
+                                            bankName: item.bankName
+                                        })}
+                                        icon="pencil"
+                                        buttonColor={theme.colors.primary}
+                                        style={{ borderRadius: 20 }}
+                                    >
+                                        开始复习
+                                    </Button>
+                                </View>
                             </View>
-                            <Divider style={{ marginVertical: 12 }} />
-                            {item.mistakes.slice(0, 3).map((mistake, index) => (
-                                <View key={mistake.id} style={styles.previewItem}>
-                                    <Text variant="bodySmall" style={{ color: 'gray' }}>
-                                        {index + 1}.
-                                    </Text>
-                                    <MathText content={mistake.content} fontSize={13} color="#666" />
-                                </View>
-                            ))}
-                            {item.mistakes.length > 3 && (
-                                <Text variant="bodySmall" style={{ color: 'gray', marginTop: 4, textAlign: 'center' }}>
-                                    还有 {item.mistakes.length - 3} 道错题...
+
+                            {/* 错题预览区域 */}
+                            <View style={{ marginTop: 16 }}>
+                                <Text variant="labelMedium" style={{ color: theme.colors.primary, marginBottom: 12, fontWeight: 'bold' }}>
+                                    📝 错题预览
                                 </Text>
-                            )}
+                                {item.mistakes.slice(0, 3).map((mistake, index) => (
+                                    <View key={mistake.id} style={styles.mistakePreview}>
+                                        <View style={[styles.indexBadge, { backgroundColor: theme.colors.secondaryContainer }]}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSecondaryContainer, fontWeight: 'bold' }}>
+                                                {index + 1}
+                                            </Text>
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <MathText content={mistake.content} fontSize={14} color={theme.colors.onSurface} />
+                                        </View>
+                                    </View>
+                                ))}
+                                {item.mistakes.length > 3 && (
+                                    <View style={[styles.moreIndicator, { backgroundColor: theme.colors.surfaceVariant }]}>
+                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                                            📚 还有 {item.mistakes.length - 3} 道错题等待复习
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
                         </Card.Content>
                     </Card>
                 )}
             />
+
+            {/* 清空全部对话框 */}
+            <Portal>
+                <Dialog visible={clearAllDialog} onDismiss={() => setClearAllDialog(false)}>
+                    <Dialog.Title>确认清空</Dialog.Title>
+                    <Dialog.Content>
+                        <Text variant="bodyMedium">确定要清空所有错题吗？此操作不可恢复。</Text>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setClearAllDialog(false)}>取消</Button>
+                        <Button onPress={clearAllMistakes} textColor={theme.colors.error}>确认清空</Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
+
+            {/* 清空题库对话框 */}
+            <Portal>
+                <Dialog visible={clearBankDialog !== null} onDismiss={() => setClearBankDialog(null)}>
+                    <Dialog.Title>确认清空</Dialog.Title>
+                    <Dialog.Content>
+                        <Text variant="bodyMedium">
+                            确定要清空"{groupedMistakes.find(g => g.bankId === clearBankDialog)?.bankName}"的所有错题吗？
+                        </Text>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setClearBankDialog(null)}>取消</Button>
+                        <Button
+                            onPress={() => clearBankDialog && clearBankMistakes(clearBankDialog)}
+                            textColor={theme.colors.error}
+                        >
+                            确认清空
+                        </Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
         </View>
     );
 }
@@ -141,7 +264,47 @@ export default function MistakeScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     emptyContainer: { justifyContent: 'center', alignItems: 'center' },
-    bankCard: { marginBottom: 16, borderRadius: 12 },
+    bankCard: {
+        marginBottom: 16,
+        borderRadius: 16,
+        overflow: 'hidden',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        borderRadius: 12,
+    },
     bankHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    badge: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    mistakePreview: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 12,
+        gap: 10,
+    },
+    indexBadge: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     previewItem: { flexDirection: 'row', marginTop: 8, gap: 8 },
+    moreIndicator: {
+        padding: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 4,
+    },
 });

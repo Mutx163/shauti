@@ -197,6 +197,16 @@ export default function HomeScreen() {
                 <Text style={{ color: theme.colors.onSecondaryContainer, fontSize: 10 }}>分享</Text>
             </TouchableOpacity>
             <TouchableOpacity
+                style={[styles.swipeAction, { backgroundColor: '#BBDEFB' }]}
+                onPress={() => {
+                    closeSwipeable(item.id);
+                    navigation.navigate('MasteryList', { bankId: item.id, bankName: item.name });
+                }}
+            >
+                <IconButton icon="format-list-checks" iconColor="#1976D2" size={20} />
+                <Text style={{ color: '#1976D2', fontSize: 10 }}>清单</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
                 style={[styles.swipeAction, { backgroundColor: '#e0e0e0' }]}
                 onPress={() => openMerge(item)}
             >

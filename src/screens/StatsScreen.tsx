@@ -8,9 +8,12 @@ import { BarChart } from 'react-native-gifted-charts';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function StatsScreen() {
     const theme = useTheme();
     const isFocused = useIsFocused();
+    const insets = useSafeAreaInsets();
     const [loading, setLoading] = useState(true);
     const isFirstLoad = useRef(true);
 
@@ -23,6 +26,7 @@ export default function StatsScreen() {
 
     const [heatmapData, setHeatmapData] = useState<any[]>([]);
     const [masteryData, setMasteryData] = useState<any[]>([]);
+    const [maxMasteryVal, setMaxMasteryVal] = useState(10);
     const [banks, setBanks] = useState<any[]>([]);
     const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
 
@@ -46,7 +50,6 @@ export default function StatsScreen() {
             // 1. Basic Stats
             let totalQuery = 'SELECT COUNT(*) as count FROM user_progress';
             let correctQuery = 'SELECT COUNT(*) as count FROM user_progress WHERE is_correct = 1';
-            let params: any[] = [];
 
             if (selectedBankId) {
                 totalQuery = `
@@ -61,7 +64,6 @@ export default function StatsScreen() {
                     JOIN questions q ON up.question_id = q.id 
                     WHERE q.bank_id = ? AND up.is_correct = 1
                 `;
-                params = [selectedBankId];
             }
 
             const totalRes: any = selectedBankId
@@ -128,20 +130,25 @@ export default function StatsScreen() {
 
             const level0 = totalQuestions - masteryRes.reduce((acc, r) => acc + r.count, 0);
 
-            const distribution = [
-                { value: level0, label: '0', state: '未开始', color: '#e0e0e0' },
-                { value: masteryCounts[1] || 0, label: '1', state: '初期', color: '#C6E48B' },
-                { value: masteryCounts[2] || 0, label: '2', state: '初期', color: '#7BC96F' },
-                { value: masteryCounts[3] || 0, label: '3', state: '巩固', color: '#239A3B' },
-                { value: masteryCounts[4] || 0, label: '4', state: '巩固', color: '#196127' },
-                { value: masteryCounts[5] || 0, label: '5', state: '掌握', color: '#12451C' },
-                { value: (masteryCounts[6] || 0) + (masteryCounts[7] || 0), label: '6+', state: '专家', color: '#0A2B12' },
-            ].map(item => ({
+            const rawData = [
+                { value: level0, label: '0', color: '#e0e0e0' },
+                { value: masteryCounts[1] || 0, label: '1', color: '#C6E48B' },
+                { value: masteryCounts[2] || 0, label: '2', color: '#7BC96F' },
+                { value: masteryCounts[3] || 0, label: '3', color: '#239A3B' },
+                { value: masteryCounts[4] || 0, label: '4', color: '#196127' },
+                { value: masteryCounts[5] || 0, label: '5', color: '#12451C' },
+                { value: (masteryCounts[6] || 0) + (masteryCounts[7] || 0), label: '6+', color: '#0A2B12' },
+            ];
+
+            const currentMax = Math.max(...rawData.map(d => d.value), 10);
+            setMaxMasteryVal(currentMax);
+
+            const distribution = rawData.map(item => ({
                 value: item.value,
                 label: item.label,
                 frontColor: item.color,
                 topLabelComponent: () => (
-                    <Text style={{ fontSize: 9, marginBottom: 2, textAlign: 'center' }}>{item.value}</Text>
+                    <Text style={{ fontSize: 9, marginBottom: 2, textAlign: 'center', width: 25 }}>{item.value}</Text>
                 ),
             }));
 
@@ -226,14 +233,19 @@ export default function StatsScreen() {
                             <View>
                                 <BarChart
                                     data={masteryData}
-                                    barWidth={35}
+                                    barWidth={(SCREEN_WIDTH - 80) / 7 - 6}
+                                    spacing={6}
                                     noOfSections={4}
-                                    barBorderRadius={6}
-                                    height={180}
-                                    width={SCREEN_WIDTH - 64}
-                                    xAxisThickness={0}
+                                    barBorderRadius={4}
+                                    height={200}
+                                    xAxisThickness={0.5}
                                     yAxisThickness={0}
                                     hideRules
+                                    yAxisLabelWidth={0}
+                                    initialSpacing={10}
+                                    endSpacing={10}
+                                    xAxisLabelTextStyle={{ fontSize: 10, color: '#666' }}
+                                    maxValue={maxMasteryVal * 1.3}
                                 />
                                 <View style={styles.masteryLegend}>
                                     <View style={styles.legendRow}>

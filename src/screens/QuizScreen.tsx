@@ -1,11 +1,12 @@
-import React, { useLayoutEffect, useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Dimensions, KeyboardAvoidingView, Platform, Keyboard, TouchableOpacity, FlatList } from 'react-native';
+import React, { useLayoutEffect, useState, useEffect, useCallback, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, Dimensions, KeyboardAvoidingView, Platform, Keyboard, TouchableOpacity, FlatList, LayoutAnimation, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, Button, Card, RadioButton, Checkbox, TextInput, ProgressBar, useTheme, Divider, IconButton, Portal, Modal } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { State, PanGestureHandler } from 'react-native-gesture-handler';
 import MathText from '../components/MathText';
 import { useQuiz } from '../hooks/useQuiz';
+import { getDB } from '../db/database';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 80;
@@ -40,6 +41,71 @@ export default function QuizScreen() {
     const [showGrid, setShowGrid] = useState(false);
     const [viewMode, setViewMode] = useState<'page' | 'scroll' | 'flashcard'>('page');
     const [isFlipped, setIsFlipped] = useState(false);
+    // 列表模式下每个题目的临时答案（仅用于填空题/简答题）
+    const [scrollModeAnswers, setScrollModeAnswers] = useState<Map<number, any>>(new Map());
+
+    // 优化视图模式切换
+    const toggleViewMode = useCallback(() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setIsFlipped(false);
+        setViewMode(prev => {
+            if (quizMode === 'practice') {
+                return prev === 'page' ? 'scroll' : 'page';
+            }
+            return prev === 'page' ? 'scroll' : (prev === 'scroll' ? 'flashcard' : 'page');
+        });
+    }, [quizMode]);
+
+    // 删除当前错题
+    const handleDeleteMistake = useCallback(() => {
+        if (questions.length === 0) return;
+
+        Alert.alert(
+            '移除错题',
+            '确定要将此题从错题本中移除吗？',
+            [
+                { text: '取消', style: 'cancel' },
+                {
+                    text: '确定',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const currentQuestion = questions[currentIndex];
+                            const db = getDB();
+                            // 为该题添加一条正确记录
+                            await db.runAsync(
+                                `INSERT INTO user_progress (question_id, is_correct, timestamp)
+                                 VALUES (?, 1, datetime('now'))`,
+                                currentQuestion.id
+                            );
+
+                            // 从当前列表中移除该题
+                            const newQuestions = questions.filter((_, idx) => idx !== currentIndex);
+                            if (newQuestions.length === 0) {
+                                // 没有错题了，返回上一页
+                                Alert.alert('提示', '所有错题已复习完成！', [
+                                    { text: '确定', onPress: () => navigation.goBack() }
+                                ]);
+                            } else {
+                                // 返回上一页，让错题列表自动刷新
+                                navigation.goBack();
+                            }
+                        } catch (error) {
+                            console.error('Failed to remove mistake:', error);
+                            Alert.alert('错误', '删除失败，请重试');
+                        }
+                    }
+                }
+            ]
+        );
+    }, [questions, currentIndex, navigation]);
+
+    // 记忆化图标
+    const viewModeIcon = useMemo(() => {
+        if (viewMode === 'page') return 'book-open-page-variant';
+        if (viewMode === 'scroll') return 'format-list-bulleted';
+        return 'cards-outline';
+    }, [viewMode]);
 
     useLayoutEffect(() => {
         if (!loading && questions.length > 0) {
@@ -56,24 +122,26 @@ export default function QuizScreen() {
                     </TouchableOpacity>
                 ),
                 headerRight: () => (
-                    <IconButton
-                        icon={viewMode === 'page' ? 'book-open-page-variant' : (viewMode === 'scroll' ? 'format-list-bulleted' : 'cards-outline')}
-                        onPress={() => {
-                            setIsFlipped(false);
-                            setViewMode(prev => {
-                                if (quizMode === 'practice') {
-                                    return prev === 'page' ? 'scroll' : 'page';
-                                }
-                                return prev === 'page' ? 'scroll' : (prev === 'scroll' ? 'flashcard' : 'page');
-                            });
-                        }}
-                        iconColor={theme.colors.primary}
-                        size={24}
-                    />
+                    <View style={{ flexDirection: 'row' }}>
+                        {quizMode === 'mistake' && (
+                            <IconButton
+                                icon="delete-outline"
+                                onPress={() => handleDeleteMistake()}
+                                iconColor={theme.colors.error}
+                                size={24}
+                            />
+                        )}
+                        <IconButton
+                            icon={viewModeIcon}
+                            onPress={toggleViewMode}
+                            iconColor={theme.colors.primary}
+                            size={24}
+                        />
+                    </View>
                 )
             });
         }
-    }, [navigation, currentIndex, questions.length, loading, bankName, viewMode, theme, quizMode]);
+    }, [navigation, currentIndex, questions.length, loading, bankName, viewModeIcon, toggleViewMode, theme.colors.primary, theme.colors.error, quizMode]);
 
     useEffect(() => {
         setIsFlipped(false);
@@ -117,13 +185,19 @@ export default function QuizScreen() {
         const options = item.options ? JSON.parse(item.options) : {};
         const history = answerHistory.get(index);
 
-        const itemSelectedAnswer = viewMode === 'scroll' ? (history?.selectedAnswer || null) : (index === currentIndex ? selectedAnswer : (history?.selectedAnswer || null));
+        // 对于列表模式下的填空题/简答题，使用 scrollModeAnswers 存储
+        let itemSelectedAnswer;
+        if (viewMode === 'scroll' && (item.type === 'fill' || item.type === 'short')) {
+            itemSelectedAnswer = scrollModeAnswers.get(index) || history?.selectedAnswer || '';
+        } else {
+            itemSelectedAnswer = viewMode === 'scroll' ? (history?.selectedAnswer || null) : (index === currentIndex ? selectedAnswer : (history?.selectedAnswer || null));
+        }
+
         const itemShowResult = quizMode === 'study' ? true : (viewMode === 'scroll' ? (history?.showResult || false) : (index === currentIndex ? showResult : (history?.showResult || false)));
         const itemIsCorrect = viewMode === 'scroll' ? (history?.isCorrect || false) : (index === currentIndex ? isCorrect : (history?.isCorrect || false));
 
         if (viewMode === 'flashcard') {
             return (
-                // ... (flashcard part same)
                 <View style={styles.flashcardContainer}>
                     <TouchableOpacity
                         activeOpacity={0.9}
@@ -172,9 +246,16 @@ export default function QuizScreen() {
                         options={options}
                         selectedAnswer={itemSelectedAnswer}
                         setSelectedAnswer={(val: any) => {
-                            if (viewMode === 'scroll') {
+                            if (viewMode === 'scroll' && (item.type === 'single' || item.type === 'multi' || item.type === 'true_false')) {
+                                // 选择题在列表模式下自动提交
                                 submitAnswer(index, val);
+                            } else if (viewMode === 'scroll' && (item.type === 'fill' || item.type === 'short')) {
+                                // 填空题/简答题在列表模式下：保存到 scrollModeAnswers
+                                const newAnswers = new Map(scrollModeAnswers);
+                                newAnswers.set(index, val);
+                                setScrollModeAnswers(newAnswers);
                             } else {
+                                // 单页模式下的所有题型：只更新状态，不提交
                                 setSelectedAnswer(val);
                             }
                         }}
@@ -187,8 +268,22 @@ export default function QuizScreen() {
                 {viewMode === 'scroll' && quizMode === 'practice' && !itemShowResult && (
                     <Button
                         mode="contained-tonal"
-                        disabled={item.type === 'multi' ? (!itemSelectedAnswer || itemSelectedAnswer.length === 0) : !itemSelectedAnswer}
-                        onPress={() => checkAnswerForIndex(index, itemSelectedAnswer)}
+                        disabled={(() => {
+                            if (item.type === 'fill' || item.type === 'short') {
+                                const currentAnswer = scrollModeAnswers.get(index) || itemSelectedAnswer;
+                                return !currentAnswer || currentAnswer.trim().length === 0;
+                            }
+                            if (item.type === 'multi') {
+                                return !itemSelectedAnswer || itemSelectedAnswer.length === 0;
+                            }
+                            return !itemSelectedAnswer;
+                        })()}
+                        onPress={() => {
+                            const answerToSubmit = (item.type === 'fill' || item.type === 'short')
+                                ? scrollModeAnswers.get(index) || itemSelectedAnswer
+                                : itemSelectedAnswer;
+                            checkAnswerForIndex(index, answerToSubmit);
+                        }}
                         style={{ marginHorizontal: 16, marginBottom: 8 }}
                     >
                         提交答案
@@ -202,6 +297,7 @@ export default function QuizScreen() {
                         theme={theme}
                         correct_answer={item.correct_answer}
                         explanation={item.explanation}
+                        questionType={item.type}
                     />
                 )}
                 {viewMode === 'scroll' && <Divider style={{ marginVertical: 16 }} />}
@@ -406,16 +502,32 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
     }
 
     if (question.type === 'fill' || question.type === 'short') {
+        // 背题模式直接显示答案
+        if (quizMode === 'study') {
+            return (
+                <View style={{ marginTop: 8, padding: 16, backgroundColor: '#E8F5E9', borderRadius: 12, borderWidth: 1, borderColor: '#4CAF50' }}>
+                    <Text variant="bodySmall" style={{ marginBottom: 4, opacity: 0.7, fontWeight: 'bold' }}>答案：</Text>
+                    <MathText content={question.correct_answer} fontSize={16} color="#2E7D32" />
+                </View>
+            );
+        }
+
         return (
             <TextInput
                 mode="outlined"
-                label="填写答案"
                 placeholder="在此输入您的回答..."
                 value={selectedAnswer || ''}
                 onChangeText={setSelectedAnswer}
                 disabled={disabled}
                 multiline={question.type === 'short'}
+                numberOfLines={question.type === 'short' ? 4 : 1}
+                returnKeyType="done"
+                blurOnSubmit={true}
                 style={styles.textInput}
+                contentStyle={{
+                    paddingTop: question.type === 'short' ? 12 : 8,
+                    minHeight: question.type === 'short' ? 100 : 50
+                }}
                 outlineStyle={{ borderRadius: 12 }}
             />
         );
@@ -424,8 +536,14 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
     return null;
 }
 
-function ResultFeedback({ showResult, isCorrect, theme, correct_answer, explanation }: any) {
+function ResultFeedback({ showResult, isCorrect, theme, correct_answer, explanation, questionType }: any) {
     if (!showResult) return null;
+
+    // 判断题的答案转换
+    const displayAnswer = questionType === 'true_false'
+        ? (correct_answer === 'T' || correct_answer === 't' || correct_answer === 'true' ? '正确' : '错误')
+        : correct_answer;
+
     return (
         <View style={[styles.resultContainer, { backgroundColor: isCorrect ? theme.colors.primaryContainer : theme.colors.errorContainer, borderColor: isCorrect ? theme.colors.primary : theme.colors.error }]}>
             <Text variant="titleMedium" style={{ color: isCorrect ? theme.colors.onPrimaryContainer : theme.colors.onErrorContainer, marginBottom: 4 }}>
@@ -434,7 +552,7 @@ function ResultFeedback({ showResult, isCorrect, theme, correct_answer, explanat
             {!isCorrect && (
                 <View style={{ marginBottom: 8 }}>
                     <Text variant="bodyMedium" style={{ fontWeight: 'bold', marginBottom: 4 }}>正确答案：</Text>
-                    <MathText content={correct_answer} fontSize={14} color="#000" />
+                    <Text variant="bodyLarge" style={{ color: '#000', fontWeight: 'bold' }}>{displayAnswer}</Text>
                 </View>
             )}
             <Divider style={{ marginVertical: 8, opacity: 0.3 }} />
