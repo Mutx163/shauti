@@ -12,13 +12,13 @@ export default function SettingsScreen() {
 
     const [autoSkipMode, setAutoSkipMode] = useState<AutoSkipMode>('off');
     const [autoRemoveMistake, setAutoRemoveMistake] = useState(true);
-    const [stats, setStats] = useState({ total: 0, practiced: 0, correctRate: 0, mistakes: 0 });
+    const [mistakeCount, setMistakeCount] = useState(0);
     const [showSkipModal, setShowSkipModal] = useState(false);
 
     useEffect(() => {
         if (isFocused) {
             loadSettings();
-            loadStats();
+            loadMistakeCount();
         }
     }, [isFocused]);
 
@@ -29,28 +29,13 @@ export default function SettingsScreen() {
         setAutoRemoveMistake(remove);
     };
 
-    const loadStats = async () => {
+    const loadMistakeCount = async () => {
         try {
             const db = getDB();
-            // 总题数
-            const totalResult = await db.getAllAsync<{ count: number }>('SELECT COUNT(*) as count FROM questions');
-            const total = totalResult[0]?.count || 0;
-
-            // 已刷题数（有进度记录的）
-            const practicedResult = await db.getAllAsync<{ count: number }>('SELECT COUNT(DISTINCT question_id) as count FROM user_progress');
-            const practiced = practicedResult[0]?.count || 0;
-
-            // 正确率
-            const correctResult = await db.getAllAsync<{ correct: number, total: number }>('SELECT SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct, COUNT(*) as total FROM user_progress');
-            const correctRate = correctResult[0]?.total > 0 ? Math.round((correctResult[0].correct / correctResult[0].total) * 100) : 0;
-
-            // 错题数
-            const mistakesResult = await db.getAllAsync<{ count: number }>('SELECT COUNT(DISTINCT question_id) as count FROM user_progress WHERE is_correct = 0');
-            const mistakes = mistakesResult[0]?.count || 0;
-
-            setStats({ total, practiced, correctRate, mistakes });
+            const result = await db.getAllAsync<{ count: number }>('SELECT COUNT(DISTINCT question_id) as count FROM user_progress WHERE is_correct = 0');
+            setMistakeCount(result[0]?.count || 0);
         } catch (error) {
-            console.error('Failed to load stats:', error);
+            console.error('Failed to load mistake count:', error);
         }
     };
 
@@ -75,39 +60,18 @@ export default function SettingsScreen() {
     return (
         <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <View style={styles.content}>
-                {/* 学习统计 */}
-                <Card style={styles.card} mode="elevated">
-                    <Card.Content>
-                        <Text variant="titleLarge" style={{ marginBottom: 16 }}>学习统计</Text>
-                        <View style={styles.statsGrid}>
-                            <View style={styles.statItem}>
-                                <Text variant="headlineMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>{stats.total}</Text>
-                                <Text variant="bodySmall" style={{ color: 'gray' }}>总题数</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Text variant="headlineMedium" style={{ color: theme.colors.secondary, fontWeight: 'bold' }}>{stats.practiced}</Text>
-                                <Text variant="bodySmall" style={{ color: 'gray' }}>已刷题</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Text variant="headlineMedium" style={{ color: theme.colors.tertiary, fontWeight: 'bold' }}>{stats.correctRate}%</Text>
-                                <Text variant="bodySmall" style={{ color: 'gray' }}>正确率</Text>
-                            </View>
-                        </View>
-                    </Card.Content>
-                </Card>
-
                 {/* 错题管理 */}
                 <Card style={styles.card} mode="elevated">
                     <Card.Content>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <View>
                                 <Text variant="titleMedium">错题管理</Text>
-                                <Text variant="bodySmall" style={{ color: 'gray', marginTop: 4 }}>当前错题：{stats.mistakes} 题</Text>
+                                <Text variant="bodySmall" style={{ color: 'gray', marginTop: 4 }}>当前错题：{mistakeCount} 题</Text>
                             </View>
                             <Button
                                 mode="contained-tonal"
                                 onPress={() => navigation.navigate('Quiz', { mode: 'mistake' })}
-                                disabled={stats.mistakes === 0}
+                                disabled={mistakeCount === 0}
                             >
                                 查看错题
                             </Button>
@@ -151,7 +115,6 @@ export default function SettingsScreen() {
                 </Card>
             </View>
 
-            {/* 自动跳题选择弹窗 */}
             {/* 自动跳题选择弹窗 */}
             <Portal>
                 <Modal

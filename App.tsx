@@ -20,6 +20,7 @@ import MockConfigScreen from './src/screens/MockConfigScreen';
 import MockExamScreen from './src/screens/MockExamScreen';
 import MockResultScreen from './src/screens/MockResultScreen';
 import SearchScreen from './src/screens/SearchScreen';
+import StatsScreen from './src/screens/StatsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createMaterialTopTabNavigator();
@@ -35,6 +36,7 @@ function MainTabs() {
                 tabBarIcon: ({ color }) => {
                     let iconName: string = 'home';
                     if (route.name === 'PracticeTab') iconName = 'book-open-page-variant';
+                    else if (route.name === 'StatsTab') iconName = 'chart-bar';
                     else if (route.name === 'SettingsTab') iconName = 'cog';
                     // Using Icon from paper instead of IconButton to avoid extra padding
                     return <IconButton icon={iconName} size={22} iconColor={color} style={{ margin: 0, padding: 0, height: 24, width: 24 }} />;
@@ -66,6 +68,7 @@ function MainTabs() {
                 options={{ title: '首页' }}
             />
             <Tab.Screen name="PracticeTab" component={MistakeScreen} options={{ title: '练习' }} />
+            <Tab.Screen name="StatsTab" component={StatsScreen} options={{ title: '统计' }} />
             <Tab.Screen name="SettingsTab" component={SettingsScreen} options={{ title: '设置' }} />
         </Tab.Navigator>
     );
@@ -78,6 +81,8 @@ function getHeaderTitle(route: any) {
             return '刷题宝';
         case 'PracticeTab':
             return '练习中心';
+        case 'StatsTab':
+            return '数据统计';
         case 'SettingsTab':
             return '设置';
     }
