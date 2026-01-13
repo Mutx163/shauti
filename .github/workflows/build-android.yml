@@ -1,4 +1,4 @@
-name: Build Android App
+name: Build Android App (本地编译)
 
 on:
   push:
@@ -6,59 +6,53 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build type (apk or aab)'
-        required: true
-        default: 'apk'
-        type: choice
-        options:
-          - apk
-          - aab
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📥 Checkout repository
+      - name: 📥 检出代码
         uses: actions/checkout@v4
 
-      - name: 🏗️ Setup Node.js
+      - name: 🏗️ 设置 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: 🏗️ Setup Java
+      - name: 🏗️ 设置 Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 🏗️ Setup Expo and EAS
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: 🏗️ 设置 Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: 📦 Install dependencies
+      - name: 📦 安装依赖
         run: npm ci
 
-      - name: 🚀 Build APK
-        if: github.event.inputs.build_type == 'apk' || github.event.inputs.build_type == ''
-        run: eas build -p android --profile preview --non-interactive --no-wait
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - name: 🔧 运行 Expo Prebuild
+        run: npx expo prebuild --platform android --clean
 
-      - name: 🚀 Build AAB
-        if: github.event.inputs.build_type == 'aab'
-        run: eas build -p android --profile preview-aab --non-interactive --no-wait
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
-      - name: 📊 Build Status
+      - name: 🔑 生成调试签名
         run: |
-          echo "✅ Build submitted successfully!"
-          echo "📱 Check build status at: https://expo.dev/accounts/${{ github.repository_owner }}/projects/stt/builds"
+          cd android/app
+          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: 🚀 编译 APK
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      - name: 📦 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ github.sha }}
+          path: android/app/build/outputs/apk/release/app-release.apk
+
+      - name: 📊 编译完成
+        run: |
+          echo "✅ APK 编译成功！"
+          echo "📱 在 Actions 页面的 Artifacts 中下载"
