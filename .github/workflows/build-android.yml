@@ -36,14 +36,10 @@ jobs:
       - name: 🔧 运行 Expo Prebuild
         run: npx expo prebuild --platform android --clean
 
-      - name: 🔑 生成调试签名
-        run: |
-          cd android/app
-          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
-
       - name: 🚀 编译 APK
         run: |
           cd android
+          chmod +x gradlew
           ./gradlew assembleRelease
 
       - name: 📦 上传 APK
