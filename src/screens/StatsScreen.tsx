@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
-import { Text, Card, useTheme, ActivityIndicator } from 'react-native-paper';
+import { Text, Card, useTheme, ActivityIndicator, Divider, Chip } from 'react-native-paper';
 import { useIsFocused } from '@react-navigation/native';
 import { getDB } from '../db/database';
 // @ts-ignore
-import { BarChart, PieChart } from 'react-native-gifted-charts';
+import { BarChart } from 'react-native-gifted-charts';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -12,7 +12,6 @@ export default function StatsScreen() {
     const theme = useTheme();
     const isFocused = useIsFocused();
     const [loading, setLoading] = useState(true);
-    // Use ref to track if it's the first load to prevent flickering on subsequent focuses
     const isFirstLoad = useRef(true);
 
     const [stats, setStats] = useState({
@@ -22,28 +21,55 @@ export default function StatsScreen() {
         accuracy: 0
     });
 
-    // Charts Data
-    const [trendData, setTrendData] = useState<any[]>([]);
-    const [pieData, setPieData] = useState<any[]>([]);
+    const [heatmapData, setHeatmapData] = useState<any[]>([]);
+    const [masteryData, setMasteryData] = useState<any[]>([]);
+    const [banks, setBanks] = useState<any[]>([]);
+    const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
 
     useEffect(() => {
         if (isFocused) {
             loadStats();
         }
-    }, [isFocused]);
+    }, [isFocused, selectedBankId]);
 
     const loadStats = useCallback(async () => {
-        // Only show full loading spinner on initial load or manual refresh
-        // On subsequent tab switches, we do a "silent update" (keep showing old data until new data arrives)
         if (isFirstLoad.current) {
             setLoading(true);
         }
 
         const db = getDB();
         try {
+            // 0. Load Banks for selector
+            const bankList = await db.getAllAsync('SELECT id, name FROM question_banks ORDER BY name ASC');
+            setBanks(bankList);
+
             // 1. Basic Stats
-            const totalRes: any = await db.getFirstAsync('SELECT COUNT(*) as count FROM user_progress');
-            const correctRes: any = await db.getFirstAsync('SELECT COUNT(*) as count FROM user_progress WHERE is_correct = 1');
+            let totalQuery = 'SELECT COUNT(*) as count FROM user_progress';
+            let correctQuery = 'SELECT COUNT(*) as count FROM user_progress WHERE is_correct = 1';
+            let params: any[] = [];
+
+            if (selectedBankId) {
+                totalQuery = `
+                    SELECT COUNT(*) as count 
+                    FROM user_progress up 
+                    JOIN questions q ON up.question_id = q.id 
+                    WHERE q.bank_id = ?
+                `;
+                correctQuery = `
+                    SELECT COUNT(*) as count 
+                    FROM user_progress up 
+                    JOIN questions q ON up.question_id = q.id 
+                    WHERE q.bank_id = ? AND up.is_correct = 1
+                `;
+                params = [selectedBankId];
+            }
+
+            const totalRes: any = selectedBankId
+                ? await db.getFirstAsync(totalQuery, selectedBankId)
+                : await db.getFirstAsync(totalQuery);
+            const correctRes: any = selectedBankId
+                ? await db.getFirstAsync(correctQuery, selectedBankId)
+                : await db.getFirstAsync(correctQuery);
 
             const total = totalRes?.count || 0;
             const correct = correctRes?.count || 0;
@@ -57,42 +83,69 @@ export default function StatsScreen() {
                 accuracy: accuracy
             });
 
-            // 2. Pie Chart Data
-            setPieData([
-                { value: correct, color: '#4CAF50', text: `${Math.round((correct / total) * 100) | 0}%` }, // Green
-                { value: mistake, color: '#F44336', text: `${Math.round((mistake / total) * 100) | 0}%` }, // Red
-            ]);
-
-            // 3. Trend Data (Last 7 days)
-            const rawTrend: any[] = await db.getAllAsync(`
-                SELECT 
-                    strftime('%Y-%m-%d', timestamp, 'localtime') as date, 
-                    COUNT(*) as count 
-                FROM user_progress 
-                WHERE timestamp >= date('now', '-6 days')
-                GROUP BY date
-                ORDER BY date ASC
-            `);
-
-            // Normalize data (fill missing days with 0)
-            const filledTrend = [];
-            const today = new Date();
-            for (let i = 6; i >= 0; i--) {
-                const d = new Date(today);
-                d.setDate(today.getDate() - i);
-                const dateStr = d.toISOString().split('T')[0];
-
-                const found = rawTrend.find((r: any) => r.date === dateStr);
-                filledTrend.push({
-                    value: found ? found.count : 0,
-                    label: d.getDate().toString(),
-                    frontColor: theme.colors.primary,
-                    topLabelComponent: () => (
-                        <Text style={{ fontSize: 10, marginBottom: 4 }}>{found ? found.count : ''}</Text>
-                    )
-                });
+            // 4. Heatmap Data (90 days)
+            let heatmapQuery = `
+                SELECT strftime('%Y-%m-%d', up.timestamp, 'localtime') as date, COUNT(*) as count 
+                FROM user_progress up
+            `;
+            if (selectedBankId) {
+                heatmapQuery += ' JOIN questions q ON up.question_id = q.id WHERE q.bank_id = ? AND up.timestamp >= date(\'now\', \'-89 days\')';
+            } else {
+                heatmapQuery += ' WHERE up.timestamp >= date(\'now\', \'-89 days\')';
             }
-            setTrendData(filledTrend);
+            heatmapQuery += ' GROUP BY date';
+
+            const rawHeatmap: any[] = selectedBankId
+                ? await db.getAllAsync(heatmapQuery, selectedBankId)
+                : await db.getAllAsync(heatmapQuery);
+            setHeatmapData(rawHeatmap);
+
+            // 5. Mastery/Forgetting Curve Data
+            let masteryQuery = 'SELECT mastery_level, COUNT(*) as count FROM question_mastery GROUP BY mastery_level';
+            let totalQQuery = 'SELECT COUNT(*) as count FROM questions';
+
+            if (selectedBankId) {
+                masteryQuery = `
+                    SELECT qm.mastery_level, COUNT(*) as count 
+                    FROM question_mastery qm 
+                    JOIN questions q ON qm.question_id = q.id 
+                    WHERE q.bank_id = ? 
+                    GROUP BY qm.mastery_level
+                `;
+                totalQQuery = 'SELECT COUNT(*) as count FROM questions WHERE bank_id = ?';
+            }
+
+            const masteryRes: any[] = selectedBankId
+                ? await db.getAllAsync(masteryQuery, selectedBankId)
+                : await db.getAllAsync(masteryQuery);
+            const totalQuestionsRes: any = selectedBankId
+                ? await db.getFirstAsync(totalQQuery, selectedBankId)
+                : await db.getFirstAsync(totalQQuery);
+            const totalQuestions = totalQuestionsRes?.count || 0;
+
+            const masteryCounts: Record<number, number> = {};
+            masteryRes.forEach(r => masteryCounts[r.mastery_level] = r.count);
+
+            const level0 = totalQuestions - masteryRes.reduce((acc, r) => acc + r.count, 0);
+
+            const distribution = [
+                { value: level0, label: '0', state: '未开始', color: '#e0e0e0' },
+                { value: masteryCounts[1] || 0, label: '1', state: '初期', color: '#C6E48B' },
+                { value: masteryCounts[2] || 0, label: '2', state: '初期', color: '#7BC96F' },
+                { value: masteryCounts[3] || 0, label: '3', state: '巩固', color: '#239A3B' },
+                { value: masteryCounts[4] || 0, label: '4', state: '巩固', color: '#196127' },
+                { value: masteryCounts[5] || 0, label: '5', state: '掌握', color: '#12451C' },
+                { value: (masteryCounts[6] || 0) + (masteryCounts[7] || 0), label: '6+', state: '专家', color: '#0A2B12' },
+            ].map(item => ({
+                value: item.value,
+                label: item.label,
+                frontColor: item.color,
+                topLabelComponent: () => (
+                    <Text style={{ fontSize: 9, marginBottom: 2, textAlign: 'center' }}>{item.value}</Text>
+                ),
+            }));
+
+            setMasteryData(distribution);
 
         } catch (e) {
             console.error(e);
@@ -100,13 +153,37 @@ export default function StatsScreen() {
             setLoading(false);
             isFirstLoad.current = false;
         }
-    }, []);
+    }, [theme, selectedBankId]);
 
     return (
         <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <View style={styles.content}>
+                {/* Bank Selector */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.bankSelector}
+                    contentContainerStyle={{ paddingHorizontal: 4, paddingBottom: 16 }}
+                >
+                    <Chip
+                        selected={selectedBankId === null}
+                        onPress={() => setSelectedBankId(null)}
+                        style={styles.chip}
+                    >
+                        全局统计
+                    </Chip>
+                    {banks.map(bank => (
+                        <Chip
+                            key={bank.id}
+                            selected={selectedBankId === bank.id}
+                            onPress={() => setSelectedBankId(bank.id)}
+                            style={styles.chip}
+                        >
+                            {bank.name}
+                        </Chip>
+                    ))}
+                </ScrollView>
 
-                {/* Header Cards */}
                 <View style={styles.grid}>
                     <Card style={[styles.card, { backgroundColor: theme.colors.secondaryContainer }]}>
                         <Card.Content>
@@ -130,74 +207,99 @@ export default function StatsScreen() {
                     </Card>
                 </View>
 
-                {/* Accuracy Pie Chart */}
+                {/* Heatmap */}
                 <Card style={styles.chartCard} mode="outlined">
-                    <Card.Title title="正确率分布" subtitle="累计答题情况" />
-                    <Card.Content style={{ alignItems: 'center' }}>
-                        {loading ? <ActivityIndicator size="large" /> : (
-                            stats.totalAnswered > 0 ? (
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <PieChart
-                                        data={pieData}
-                                        donut
-                                        showText
-                                        textColor="white"
-                                        radius={80}
-                                        innerRadius={50}
-                                        textSize={12}
-                                        focusOnPress
-                                    />
-                                    <View style={{ marginLeft: 20 }}>
-                                        <Legend color="#4CAF50" label={`正确 (${stats.correctCount})`} />
-                                        <Legend color="#F44336" label={`错误 (${stats.mistakeCount})`} />
-                                    </View>
-                                </View>
-                            ) : (
-                                <Text style={{ color: 'gray', padding: 20 }}>暂无数据，快去刷题吧！</Text>
-                            )
-                        )}
+                    <Card.Title title="学习热力图" subtitle="最近 90 天的学习频率" />
+                    <Card.Content>
+                        <StudyHeatmap data={heatmapData} theme={theme} />
                     </Card.Content>
                 </Card>
 
-                {/* Trend Bar Chart */}
+                {/* Forgetting Curve Distribution */}
                 <Card style={styles.chartCard} mode="outlined">
-                    <Card.Title title="近期趋势" subtitle="过去 7 天每日刷题数量" />
+                    <Card.Title
+                        title="艾宾浩斯记忆分布"
+                        subtitle="题目在不同掌握阶段的分布数量"
+                    />
                     <Card.Content>
                         {loading ? <ActivityIndicator size="large" /> : (
-                            <View style={{ overflow: 'hidden' }}>
+                            <View>
                                 <BarChart
-                                    data={trendData}
-                                    barWidth={22}
+                                    data={masteryData}
+                                    barWidth={35}
                                     noOfSections={4}
-                                    barBorderRadius={4}
-                                    frontColor={theme.colors.primary}
-                                    yAxisThickness={0}
-                                    xAxisThickness={0}
-                                    isAnimated
+                                    barBorderRadius={6}
                                     height={180}
-                                    width={SCREEN_WIDTH - 80} // Adjust based on padding
+                                    width={SCREEN_WIDTH - 64}
+                                    xAxisThickness={0}
+                                    yAxisThickness={0}
+                                    hideRules
                                 />
+                                <View style={styles.masteryLegend}>
+                                    <View style={styles.legendRow}>
+                                        <Text variant="labelSmall" style={{ opacity: 0.6 }}>掌握阶段：0 (未学) → 6+ (永生难忘)</Text>
+                                    </View>
+                                </View>
                             </View>
                         )}
                     </Card.Content>
                 </Card>
-
             </View>
         </ScrollView>
     );
 }
 
-const Legend = ({ color, label }: { color: string, label: string }) => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color, marginRight: 6 }} />
-        <Text variant="bodySmall">{label}</Text>
-    </View>
-);
+function StudyHeatmap({ data, theme }: any) {
+    const today = new Date();
+    const squares = [];
+    for (let i = 89; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        const found = data.find((r: any) => r.date === dateStr);
+        squares.push({ count: found ? found.count : 0 });
+    }
+
+    return (
+        <View style={styles.heatmapContainer}>
+            <View style={styles.heatmapGrid}>
+                {squares.map((s, i) => (
+                    <View key={i} style={[styles.heatmapSquare, { backgroundColor: getHeatColor(s.count) }]} />
+                ))}
+            </View>
+            <View style={styles.heatmapLegend}>
+                <Text style={styles.legendText}>少</Text>
+                {[0, 2, 10, 30, 50].map((c, i) => (
+                    <View key={i} style={[styles.heatmapSquareSmall, { backgroundColor: getHeatColor(c) }]} />
+                ))}
+                <Text style={styles.legendText}>多</Text>
+            </View>
+        </View>
+    );
+}
+
+function getHeatColor(count: number) {
+    if (count === 0) return '#EBEDF0';
+    if (count < 5) return '#C6E48B';
+    if (count < 15) return '#7BC96F';
+    if (count < 40) return '#239A3B';
+    return '#196127';
+}
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    content: { padding: 16 },
-    grid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-    card: { width: '31%', borderRadius: 12 },
-    chartCard: { marginBottom: 16, borderRadius: 12, backgroundColor: 'white' }
+    content: { padding: 12 },
+    grid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+    card: { width: '32%', borderRadius: 12 },
+    chartCard: { marginBottom: 12, borderRadius: 12, backgroundColor: 'white' },
+    heatmapContainer: { paddingVertical: 8 },
+    heatmapGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', justifyContent: 'flex-start' },
+    heatmapSquare: { width: (SCREEN_WIDTH - 60) / 18, height: (SCREEN_WIDTH - 60) / 18, margin: 1, borderRadius: 2 },
+    heatmapSquareSmall: { width: 10, height: 10, margin: 1, borderRadius: 1 },
+    heatmapLegend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8 },
+    legendText: { fontSize: 10, color: '#666', marginHorizontal: 4 },
+    masteryLegend: { marginTop: 12, paddingHorizontal: 4 },
+    legendRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+    bankSelector: { marginBottom: 8 },
+    chip: { marginRight: 8, height: 32 }
 });

@@ -21,6 +21,8 @@ import MockExamScreen from './src/screens/MockExamScreen';
 import MockResultScreen from './src/screens/MockResultScreen';
 import SearchScreen from './src/screens/SearchScreen';
 import StatsScreen from './src/screens/StatsScreen';
+import ManualAddScreen from './src/screens/ManualAddScreen';
+import SrsReviewScreen from './src/screens/SrsReviewScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createMaterialTopTabNavigator();
@@ -60,6 +62,7 @@ function MainTabs() {
                 },
                 tabBarShowIcon: true,
                 tabBarShowLabel: true,
+                swipeEnabled: false, // Turn off swipe between tabs to favor vertical scrolling
             })}
         >
             <Tab.Screen
@@ -131,6 +134,8 @@ export default function App() {
                             <Stack.Screen name="MockExam" component={MockExamScreen} options={{ title: '模拟考试', headerShown: false }} />
                             <Stack.Screen name="MockResult" component={MockResultScreen} options={{ title: '考试结果', headerShown: false }} />
                             <Stack.Screen name="Search" component={SearchScreen} options={{ title: '全局搜索' }} />
+                            <Stack.Screen name="ManualAdd" component={ManualAddScreen} options={{ title: '手动添加题目' }} />
+                            <Stack.Screen name="SrsReview" component={SrsReviewScreen} options={{ title: '今日复习' }} />
                         </Stack.Navigator>
                     </NavigationContainer>
                 </PaperProvider>

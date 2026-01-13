@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { Button, Text, Card, ProgressBar, HelperText, useTheme, TextInput, Divider, IconButton } from 'react-native-paper';
+import { Button, Text, Card, ProgressBar, HelperText, useTheme, TextInput, Divider, IconButton, Avatar, Portal, Modal, ActivityIndicator } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Clipboard from 'expo-clipboard';
@@ -9,7 +9,7 @@ import { getDB } from '../db/database';
 import { useNavigation } from '@react-navigation/native';
 
 export default function ImportScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
     const theme = useTheme();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -20,7 +20,7 @@ export default function ImportScreen() {
         setError('');
         try {
             const result = await DocumentPicker.getDocumentAsync({
-                type: ['text/csv', 'text/comma-separated-values', 'application/csv'],
+                type: ['text/csv', 'text/comma-separated-values', 'application/csv', 'text/plain'],
                 copyToCacheDirectory: true,
             });
 
@@ -55,7 +55,7 @@ export default function ImportScreen() {
                 try {
                     await saveToDatabase(results.data, bankName);
                     setLoading(false);
-                    Alert.alert('成功', '题库已导入');
+                    Alert.alert('成功', '题库已同步至本地');
                     navigation.goBack();
                 } catch (e) {
                     setError('保存失败');
@@ -76,7 +76,7 @@ export default function ImportScreen() {
             // 1. Create Question Bank
             const bankResult = await db.runAsync(
                 'INSERT INTO question_banks (name, description) VALUES (?, ?)',
-                fileName.replace('.csv', ''),
+                fileName.replace('.csv', '').replace('.txt', ''),
                 `导入时间: ${new Date().toLocaleString()}`
             );
 
@@ -179,7 +179,7 @@ export default function ImportScreen() {
         setLoading(true);
         try {
             await saveToDatabase(sampleData, '数学公式示例题库');
-            Alert.alert('成功', '公式示例题库已导入，支持 LaTeX 渲染！');
+            Alert.alert('成功', '示例已同步，支持 LaTeX 渲染！');
             navigation.goBack();
         } catch (e) {
             Alert.alert('错误', '导入失败');
@@ -190,67 +190,62 @@ export default function ImportScreen() {
 
     return (
         <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <View style={styles.header}>
+                <View style={[styles.iconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+                    <IconButton icon="database-import" iconColor={theme.colors.primary} size={32} />
+                </View>
+                <Text variant="headlineSmall" style={styles.title}>同步导入中心</Text>
+                <Text variant="bodyMedium" style={styles.subtitle}>您可以手动录入或多种方式批量导入题库</Text>
+            </View>
+
             <View style={styles.content}>
-                <Text variant="headlineSmall" style={{ marginBottom: 20 }}>导入题库</Text>
-
-                <Card style={styles.card} mode="outlined">
-                    <Card.Content>
-                        <Text variant="titleMedium" style={{ marginBottom: 10 }}>文件导入 (CSV)</Text>
-                        <Text variant="bodySmall" style={{ marginBottom: 15, color: 'gray' }}>
-                            格式要求：type, content, A, B, C, D, answer, explanation
-                        </Text>
-                        <Button
-                            mode="contained"
-                            onPress={handleSelectFile}
-                            loading={loading}
-                            disabled={loading}
-                            icon="file-upload"
-                        >
-                            选择 CSV 文件
-                        </Button>
-                    </Card.Content>
-                </Card>
-
-                <Card style={[styles.card, { backgroundColor: '#f0f4ff', borderColor: '#d0d7ff' }]} mode="outlined">
-                    <Card.Content>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                            <IconButton icon="robot" size={20} iconColor={theme.colors.primary} style={{ margin: 0, marginRight: 4 }} />
-                            <Text variant="titleSmall" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>AI 辅助整理</Text>
+                {/* Manual Add - Primary Action */}
+                <Card
+                    style={[styles.mainCard, { backgroundColor: theme.colors.primary }]}
+                    onPress={() => navigation.navigate('ManualAdd')}
+                >
+                    <Card.Content style={styles.mainCardContent}>
+                        <View style={styles.mainCardText}>
+                            <Text variant="titleLarge" style={{ color: 'white', fontWeight: 'bold' }}>手动录入题目</Text>
+                            <Text variant="bodySmall" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                                逐题手写添加，支持 LaTeX 公式预览及所有题型
+                            </Text>
                         </View>
-                        <Text variant="bodySmall" style={{ marginBottom: 12, color: '#555', lineHeight: 18 }}>
-                            手头题目格式乱？点击下方按钮复制“AI 整理指令”，发送给 ChatGPT/Claude 帮你秒变标准格式。
-                        </Text>
-                        <Button
-                            mode="contained-tonal"
-                            icon="content-copy"
-                            onPress={async () => {
-                                const prompt = `请帮我将以下题目整理成标准 CSV 格式。要求如下：
-1. 列名必须严格为：type,content,A,B,C,D,answer,explanation
-2. type 取值：单选(single), 多选(multi), 判断(true_false), 填空(fill), 简答(short)
-3. **支持数学公式**：数学公式请使用 LaTeX 格式，用 $ 符号包裹（如 $E=mc^2$ 或 $$\\int_0^1 x dx$$）
-4. A-D 列：选择题填内容；非选择题留空；判断题留空
-5. answer 格式：单选填 A/B/C/D；多选填 ABCD；判断填 T/F；填空简答题填答案文本
-6. 请直接输出 CSV 纯文本，不要包含代码块标记（如 \`\`\`）`;
-                                await Clipboard.setStringAsync(prompt);
-                                Alert.alert('已复制', '支持数学公式的 AI 指令已复制！');
-                            }}
-                        >
-                            复制 AI 整理指令
-                        </Button>
+                        <Avatar.Icon icon="plus" size={48} style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} color="white" />
                     </Card.Content>
                 </Card>
 
+                <View style={styles.sectionTitleRow}>
+                    <Divider style={styles.sectionDivider} />
+                    <Text variant="labelLarge" style={styles.sectionTitle}>批量导入方案</Text>
+                    <Divider style={styles.sectionDivider} />
+                </View>
+
+                {/* CSV File Import */}
+                <Card style={styles.card} mode="outlined" onPress={handleSelectFile}>
+                    <Card.Title
+                        title="标准 CSV/TXT 文件"
+                        subtitle="从外部电子表格批量拉取题目"
+                        left={(props) => <Avatar.Icon {...props} icon="file-delimited" style={{ backgroundColor: "#4CAF50" }} />}
+                        right={(props) => <IconButton {...props} icon="chevron-right" />}
+                    />
+                </Card>
+
+                {/* Paste Code */}
                 <Card style={styles.card} mode="outlined">
                     <Card.Content>
-                        <Text variant="titleMedium" style={{ marginBottom: 10 }}>粘贴代码导入</Text>
-                        <Text variant="bodySmall" style={{ marginBottom: 10, color: 'gray' }}>
-                            在此粘贴分享码或 CSV 格式题目代码
-                        </Text>
+                        <View style={styles.cardHeader}>
+                            <Avatar.Icon icon="content-paste" size={40} style={{ backgroundColor: "#FF9800" }} />
+                            <View style={{ marginLeft: 12 }}>
+                                <Text variant="titleMedium">粘贴代码导入</Text>
+                                <Text variant="bodySmall" style={{ color: 'gray' }}>分享码或 CSV 代码段</Text>
+                            </View>
+                        </View>
                         <TextInput
-                            mode="outlined"
-                            placeholder="在这里粘贴题库分享码或 CSV 代码..."
+                            mode="flat"
+                            placeholder="在此粘贴分享码或 CSV 内容..."
                             multiline
-                            numberOfLines={6}
+                            numberOfLines={3}
                             value={pasteText}
                             onChangeText={setPasteText}
                             style={styles.textInput}
@@ -260,37 +255,70 @@ export default function ImportScreen() {
                             onPress={handlePasteImport}
                             loading={loading}
                             disabled={loading || !pasteText.trim()}
-                            style={{ marginTop: 10 }}
-                            icon="content-paste"
+                            style={{ marginTop: 8 }}
                         >
-                            解析并导入
+                            解析并同步
                         </Button>
                     </Card.Content>
                 </Card>
 
-                <Divider style={{ marginVertical: 20 }} />
+                {/* AI Helper */}
+                <Card style={[styles.card, { backgroundColor: '#f0f4ff', borderColor: '#d0d7ff' }]} mode="outlined">
+                    <Card.Content>
+                        <View style={styles.cardHeader}>
+                            <Avatar.Icon icon="robot" size={40} style={{ backgroundColor: theme.colors.primary }} />
+                            <View style={{ marginLeft: 12, flex: 1 }}>
+                                <Text variant="titleMedium" style={{ color: theme.colors.primary }}>AI 整理助手</Text>
+                                <Text variant="bodySmall" style={{ color: '#555' }}>
+                                    将杂乱文字秒变标准格式
+                                </Text>
+                            </View>
+                        </View>
+                        <Button
+                            mode="outlined"
+                            icon="content-copy"
+                            style={{ marginTop: 12, borderColor: theme.colors.primary }}
+                            onPress={async () => {
+                                const prompt = `请帮我将以下题目整理成标准 CSV 格式。要求如下：
+1. 列名必须严格为：type,content,A,B,C,D,answer,explanation
+2. type 取值：单选(single), 多选(multi), 判断(true_false), 填空(fill), 简答(short)
+3. **支持数学公式**：数学公式请使用 LaTeX 格式，用 $ 符号包裹
+4. A-D 列：选择题填内容；非选择题留空；判断题留空
+5. answer 格式：单选填 A/B/C/D；多选填 ABCD；判断填 T/F；填空简答题填答案文本
+6. 请直接输出 CSV 纯文本，不要包含代码块标记`;
+                                await Clipboard.setStringAsync(prompt);
+                                Alert.alert('已复制', 'AI 整理指令已复制，请发送给 AI 助手。');
+                            }}
+                        >
+                            获取 AI 整理指令
+                        </Button>
+                    </Card.Content>
+                </Card>
 
-                <View style={{ alignItems: 'center' }}>
+                <View style={styles.footer}>
                     <Button
                         mode="text"
                         onPress={handleImportSample}
                         disabled={loading}
-                        icon="flash-outline"
+                        icon="lightbulb-outline"
+                        textColor="gray"
                     >
-                        导入公式示例题库
+                        导入 LaTeX 公式演示题库
                     </Button>
                 </View>
 
-                {loading && (
-                    <View style={{ marginTop: 20 }}>
-                        <Text variant="bodySmall" style={{ textAlign: 'center', marginBottom: 5 }}>
-                            正在导入: {Math.round(progress * 100)}%
+                <Portal>
+                    <Modal visible={loading} dismissable={false} contentContainerStyle={styles.loadingModal}>
+                        <ActivityIndicator size="large" color={theme.colors.primary} />
+                        <Text variant="titleMedium" style={{ marginTop: 16 }}>正在飞速处理题库...</Text>
+                        <Text variant="bodySmall" style={{ marginTop: 8, color: 'gray' }}>
+                            已完成 {Math.round(progress * 100)}%
                         </Text>
-                        <ProgressBar progress={progress} />
-                    </View>
-                )}
+                        <ProgressBar progress={progress} style={{ width: 200, marginTop: 12, height: 6, borderRadius: 3 }} />
+                    </Modal>
+                </Portal>
 
-                {error ? <HelperText type="error" visible={!!error}>{error}</HelperText> : null}
+                {error ? <HelperText type="error" visible={!!error} style={{ textAlign: 'center' }}>{error}</HelperText> : null}
             </View>
         </ScrollView>
     );
@@ -298,11 +326,52 @@ export default function ImportScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    content: { padding: 20 },
-    card: { marginBottom: 16, borderRadius: 12 },
+    header: {
+        alignItems: 'center',
+        paddingVertical: 32,
+        paddingHorizontal: 20,
+    },
+    iconContainer: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    title: { fontWeight: 'bold', marginBottom: 4 },
+    subtitle: { color: 'gray', textAlign: 'center' },
+    content: { padding: 16 },
+    mainCard: { marginBottom: 24, borderRadius: 20, elevation: 4 },
+    mainCardContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 20,
+        paddingHorizontal: 16,
+    },
+    mainCardText: { flex: 1, marginRight: 16 },
+    card: { marginBottom: 16, borderRadius: 16, overflow: 'hidden' },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    sectionTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+        paddingHorizontal: 8,
+    },
+    sectionTitle: { marginHorizontal: 12, color: 'gray', opacity: 0.8 },
+    sectionDivider: { flex: 1, height: 1, opacity: 0.2 },
     textInput: {
+        backgroundColor: '#f9f9f9',
+        fontSize: 13,
+        paddingHorizontal: 0,
+    },
+    footer: { marginTop: 16, alignItems: 'center', paddingBottom: 40 },
+    loadingModal: {
         backgroundColor: 'white',
-        fontSize: 14,
-        marginBottom: 10,
+        padding: 32,
+        margin: 40,
+        borderRadius: 28,
+        alignItems: 'center',
     }
 });

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, Alert, TouchableOpacity } from 'react-native';
-import { Text, Card, useTheme, IconButton, Avatar, Portal, Modal, TextInput, Button, Menu } from 'react-native-paper'; // Added Menu for 'More' options if needed, but using Action Sheet logic via simple Buttons for now inside a Modal or just direct buttons. Actually I'll use a local state for modals.
-import { Text as NativeText } from 'react-native'; // fallback if needed
+import { Text, Card, useTheme, IconButton, Avatar, Portal, Modal, TextInput, Button } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getDB, QuestionBank } from '../db/database';
@@ -11,7 +10,9 @@ export default function HomeScreen() {
     const navigation = useNavigation<any>();
     const isFocused = useIsFocused();
     const theme = useTheme();
-    const [banks, setBanks] = useState<QuestionBank[]>([]);
+
+    const [banks, setBanks] = useState<(QuestionBank & { due_count?: number; mistake_count?: number })[]>([]);
+    const [reviewCount, setReviewCount] = useState(0);
 
     // Rename State
     const [renameVisible, setRenameVisible] = useState(false);
@@ -21,25 +22,66 @@ export default function HomeScreen() {
     // Merge State
     const [mergeVisible, setMergeVisible] = useState(false);
     const [mergeTargetId, setMergeTargetId] = useState<number | null>(null);
-    // targetBank is the SOURCE bank to be merged. mergeTargetId is the DESTINATION bank id.
 
     const loadBanks = async () => {
         try {
             const db = getDB();
-            const result = await db.getAllAsync<QuestionBank>('SELECT * FROM question_banks ORDER BY created_at DESC');
+            const result = await db.getAllAsync<QuestionBank & { due_count: number; mistake_count: number }>(`
+                SELECT 
+                    qb.*, 
+                    (SELECT COUNT(*) FROM questions q 
+                     JOIN question_mastery qm ON q.id = qm.question_id 
+                     WHERE q.bank_id = qb.id AND datetime(qm.next_review_time, 'localtime') <= datetime('now', 'localtime')) as due_count,
+                    (SELECT COUNT(*) FROM questions q 
+                     WHERE q.bank_id = qb.id AND EXISTS (
+                         SELECT 1 FROM user_progress up 
+                         WHERE up.question_id = q.id 
+                         AND up.id = (SELECT id FROM user_progress WHERE question_id = q.id ORDER BY timestamp DESC LIMIT 1)
+                         AND up.is_correct = 0
+                     )) as mistake_count
+                FROM question_banks qb
+                ORDER BY qb.created_at DESC
+            `);
             setBanks(result);
         } catch (error) {
             console.error(error);
         }
     };
 
+    const loadReviewCount = async () => {
+        try {
+            const db = getDB();
+            // Fetch count of items due for review
+            const result: any = await db.getFirstAsync(`
+                SELECT COUNT(*) as count 
+                FROM questions q
+                JOIN question_mastery qm ON q.id = qm.question_id
+                WHERE datetime(qm.next_review_time, 'localtime') <= datetime('now', 'localtime')
+            `);
+            setReviewCount(result?.count || 0);
+        } catch (error) {
+            console.error('Failed to load review count:', error);
+        }
+    };
+
     useEffect(() => {
         if (isFocused) {
             loadBanks();
+            loadReviewCount();
         }
     }, [isFocused]);
 
+    const swipeableRefs = React.useRef<Map<number, any>>(new Map());
+
+    const closeSwipeable = (id: number) => {
+        const ref = swipeableRefs.current.get(id);
+        if (ref) {
+            ref.close();
+        }
+    };
+
     const handleDeleteBank = async (id: number, name: string) => {
+        closeSwipeable(id);
         Alert.alert(
             '确认删除',
             `确定要删除题库 "${name}" 吗？此操作不可撤销。`,
@@ -64,6 +106,7 @@ export default function HomeScreen() {
     };
 
     const handleShare = async (bank: QuestionBank) => {
+        closeSwipeable(bank.id);
         try {
             const db = getDB();
             const questions = await db.getAllAsync('SELECT * FROM questions WHERE bank_id = ?', bank.id);
@@ -78,6 +121,7 @@ export default function HomeScreen() {
                     explanation: q.explanation
                 }))
             };
+            // Simple base64 for transfer
             const shareCode = btoa(unescape(encodeURIComponent(JSON.stringify(shareData))));
             await Clipboard.setStringAsync(shareCode);
             Alert.alert('分享成功', '题库分享码已复制到剪贴板，快发给小伙伴吧！');
@@ -101,13 +145,15 @@ export default function HomeScreen() {
     };
 
     const openRename = (bank: QuestionBank) => {
+        closeSwipeable(bank.id);
         setTargetBank(bank);
         setNewName(bank.name);
         setRenameVisible(true);
     };
 
     const openMerge = (bank: QuestionBank) => {
-        setTargetBank(bank); // This is the source bank
+        closeSwipeable(bank.id);
+        setTargetBank(bank);
         setMergeTargetId(null);
         setMergeVisible(true);
     };
@@ -121,9 +167,7 @@ export default function HomeScreen() {
 
         try {
             const db = getDB();
-            // Move questions
             await db.runAsync('UPDATE questions SET bank_id = ? WHERE bank_id = ?', mergeTargetId, targetBank.id);
-            // Delete source bank
             await db.runAsync('DELETE FROM question_banks WHERE id = ?', targetBank.id);
 
             setMergeVisible(false);
@@ -175,14 +219,38 @@ export default function HomeScreen() {
                 data={banks}
                 keyExtractor={(item) => item.id.toString()}
                 contentContainerStyle={{ padding: 16 }}
-                ListHeaderComponent={null}
+                ListHeaderComponent={
+                    reviewCount > 0 ? (
+                        <Card
+                            style={styles.reviewCard}
+                            onPress={() => navigation.navigate('SrsReview')}
+                        >
+                            <Card.Title
+                                title="今日待复习"
+                                subtitle={`已有 ${reviewCount} 道题目等待巩固`}
+                                titleStyle={{ color: theme.colors.onPrimaryContainer, fontWeight: 'bold' }}
+                                left={(props) => <Avatar.Icon {...props} icon="calendar-check" style={{ backgroundColor: theme.colors.primary }} />}
+                                right={(props) => <IconButton {...props} icon="chevron-right" iconColor={theme.colors.onPrimaryContainer} />}
+                                style={{ backgroundColor: theme.colors.primaryContainer, borderRadius: 16 }}
+                            />
+                        </Card>
+                    ) : null
+                }
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
+                        <IconButton icon="book-off-outline" size={64} style={{ opacity: 0.2 }} />
                         <Text variant="bodyLarge">暂无题库，请点击右上角按钮导入。</Text>
                     </View>
                 }
                 renderItem={({ item }) => (
-                    <Swipeable renderRightActions={() => renderRightActions(item)}>
+                    <Swipeable
+                        activeOffsetX={[-30, 30]} // Increase threshold to avoid accidental trigger during vertical scroll
+                        ref={ref => {
+                            if (ref) swipeableRefs.current.set(item.id, ref);
+                            else swipeableRefs.current.delete(item.id);
+                        }}
+                        renderRightActions={() => renderRightActions(item)}
+                    >
                         <Card
                             style={styles.card}
                             onPress={() => navigation.navigate('QuizConfig', { bankId: item.id, bankName: item.name })}
@@ -190,11 +258,27 @@ export default function HomeScreen() {
                         >
                             <Card.Title
                                 title={item.name}
-                                subtitle={item.description || '左滑更多操作'}
+                                subtitle={item.description || '开始学习之旅'}
                                 titleVariant="titleMedium"
                                 subtitleVariant="bodySmall"
                                 right={(props) => (
-                                    <IconButton {...props} icon="chevron-right" />
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        {item.due_count! > 0 && (
+                                            <View style={[styles.dueBadge, { backgroundColor: theme.colors.secondaryContainer }]}>
+                                                <Text style={[styles.dueBadgeText, { color: theme.colors.secondary }]}>
+                                                    {item.due_count} 复习
+                                                </Text>
+                                            </View>
+                                        )}
+                                        {item.mistake_count! > 0 && (
+                                            <View style={[styles.dueBadge, { backgroundColor: theme.colors.errorContainer }]}>
+                                                <Text style={[styles.dueBadgeText, { color: theme.colors.error }]}>
+                                                    {item.mistake_count} 错题
+                                                </Text>
+                                            </View>
+                                        )}
+                                        <IconButton {...props} icon="chevron-right" />
+                                    </View>
                                 )}
                             />
                         </Card>
@@ -202,7 +286,6 @@ export default function HomeScreen() {
                 )}
             />
             <Portal>
-                {/* Rename Modal */}
                 <Modal visible={renameVisible} onDismiss={() => setRenameVisible(false)} contentContainerStyle={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
                     <Text variant="titleMedium" style={{ marginBottom: 16 }}>重命名题库</Text>
                     <TextInput
@@ -218,7 +301,6 @@ export default function HomeScreen() {
                     </View>
                 </Modal>
 
-                {/* Merge Modal */}
                 <Modal visible={mergeVisible} onDismiss={() => setMergeVisible(false)} contentContainerStyle={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
                     <Text variant="titleMedium" style={{ marginBottom: 8 }}>合并题库</Text>
                     <Text variant="bodySmall" style={{ color: 'gray', marginBottom: 16 }}>
@@ -258,10 +340,11 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    emptyContainer: { alignItems: 'center', marginTop: 50 },
+    emptyContainer: { alignItems: 'center', marginTop: 100, opacity: 0.5 },
     card: { marginBottom: 12, borderRadius: 12 },
+    reviewCard: { marginBottom: 20, borderRadius: 16, overflow: 'hidden' },
     swipeActions: {
-        width: 250, // Increased width for 4 actions
+        width: 250,
         marginBottom: 12,
         flexDirection: 'row',
     },
@@ -269,18 +352,25 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 0,
-        marginLeft: 0,
     },
     modalContent: {
         margin: 20,
         padding: 24,
         borderRadius: 28,
-        backgroundColor: 'white',
     },
     bankOption: {
         padding: 12,
         borderBottomWidth: 1,
         borderBottomColor: '#eee',
+    },
+    dueBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginRight: 4,
+    },
+    dueBadgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
     }
 });

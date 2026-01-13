@@ -28,11 +28,15 @@ export default function MistakeScreen() {
             const db = getDB();
             // 获取所有错题及其题库信息
             const mistakes = await db.getAllAsync<Question & { bank_name: string }>(
-                `SELECT DISTINCT q.*, qb.name as bank_name
+                `SELECT q.*, qb.name as bank_name
                  FROM questions q 
                  JOIN question_banks qb ON q.bank_id = qb.id
-                 JOIN user_progress up ON q.id = up.question_id 
-                 WHERE up.is_correct = 0
+                 WHERE EXISTS (
+                     SELECT 1 FROM user_progress up 
+                     WHERE up.question_id = q.id 
+                     AND up.id = (SELECT id FROM user_progress WHERE question_id = q.id ORDER BY timestamp DESC LIMIT 1)
+                     AND up.is_correct = 0
+                 )
                  ORDER BY qb.name, q.id`
             );
 

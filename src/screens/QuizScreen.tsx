@@ -27,6 +27,9 @@ export default function QuizScreen() {
         completed,
         answerHistory,
         checkAnswer,
+        checkAnswerForIndex,
+        submitAnswer,
+        markMastery,
         handleNext,
         handlePrev,
         bankName,
@@ -35,6 +38,8 @@ export default function QuizScreen() {
 
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [showGrid, setShowGrid] = useState(false);
+    const [viewMode, setViewMode] = useState<'page' | 'scroll' | 'flashcard'>('page');
+    const [isFlipped, setIsFlipped] = useState(false);
 
     useLayoutEffect(() => {
         if (!loading && questions.length > 0) {
@@ -50,9 +55,29 @@ export default function QuizScreen() {
                         <IconButton icon="chevron-down" size={16} />
                     </TouchableOpacity>
                 ),
+                headerRight: () => (
+                    <IconButton
+                        icon={viewMode === 'page' ? 'book-open-page-variant' : (viewMode === 'scroll' ? 'format-list-bulleted' : 'cards-outline')}
+                        onPress={() => {
+                            setIsFlipped(false);
+                            setViewMode(prev => {
+                                if (quizMode === 'practice') {
+                                    return prev === 'page' ? 'scroll' : 'page';
+                                }
+                                return prev === 'page' ? 'scroll' : (prev === 'scroll' ? 'flashcard' : 'page');
+                            });
+                        }}
+                        iconColor={theme.colors.primary}
+                        size={24}
+                    />
+                )
             });
         }
-    }, [navigation, currentIndex, questions.length, loading, bankName]);
+    }, [navigation, currentIndex, questions.length, loading, bankName, viewMode, theme, quizMode]);
+
+    useEffect(() => {
+        setIsFlipped(false);
+    }, [currentIndex]);
 
     useEffect(() => {
         const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => setKeyboardHeight(e.endCoordinates.height));
@@ -64,6 +89,7 @@ export default function QuizScreen() {
     }, []);
 
     const onGestureEvent = (event: any) => {
+        if (viewMode === 'scroll') return;
         if (event.nativeEvent.state === State.END) {
             const { translationX, velocityX } = event.nativeEvent;
             if (translationX < -SWIPE_THRESHOLD || (velocityX < -800 && translationX < -20)) {
@@ -74,7 +100,7 @@ export default function QuizScreen() {
         }
     };
 
-    if (loading) return <View style={styles.center}><Text>加载中...</Text></View>;
+    if (loading) return <View style={styles.center}><ActivityIndicator size="large" /><Text style={{ marginTop: 10 }}>加载中...</Text></View>;
     if (questions.length === 0) return <View style={styles.center}><Text>没有题目</Text></View>;
     if (completed) {
         return (
@@ -87,8 +113,101 @@ export default function QuizScreen() {
         );
     }
 
-    const currentQuestion = questions[currentIndex];
-    const options = currentQuestion.options ? JSON.parse(currentQuestion.options) : {};
+    const renderQuestionItem = ({ item, index }: { item: any, index: number }) => {
+        const options = item.options ? JSON.parse(item.options) : {};
+        const history = answerHistory.get(index);
+
+        const itemSelectedAnswer = viewMode === 'scroll' ? (history?.selectedAnswer || null) : (index === currentIndex ? selectedAnswer : (history?.selectedAnswer || null));
+        const itemShowResult = quizMode === 'study' ? true : (viewMode === 'scroll' ? (history?.showResult || false) : (index === currentIndex ? showResult : (history?.showResult || false)));
+        const itemIsCorrect = viewMode === 'scroll' ? (history?.isCorrect || false) : (index === currentIndex ? isCorrect : (history?.isCorrect || false));
+
+        if (viewMode === 'flashcard') {
+            return (
+                // ... (flashcard part same)
+                <View style={styles.flashcardContainer}>
+                    <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={() => setIsFlipped(!isFlipped)}
+                        style={[styles.flashcard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}
+                    >
+                        {!isFlipped ? (
+                            <View style={styles.flashcardPart}>
+                                <View style={[styles.typeBadge, { backgroundColor: getTypeColor(item.type, theme), marginBottom: 12 }]}>
+                                    <Text style={styles.typeBadgeText}>{getTypeLabel(item.type)}</Text>
+                                </View>
+                                <MathText content={item.content} fontSize={22} baseStyle={{ alignSelf: 'center' }} />
+                                <Text style={styles.tapTip}>点击翻转查看答案</Text>
+                            </View>
+                        ) : (
+                            <ScrollView style={styles.flashcardPart}>
+                                <Text variant="labelLarge" style={{ color: theme.colors.primary, marginBottom: 8 }}>答案：</Text>
+                                <MathText content={item.correct_answer} fontSize={18} color={theme.colors.onSurface} />
+                                <Divider style={{ marginVertical: 16 }} />
+                                <Text variant="labelLarge" style={{ color: theme.colors.secondary, marginBottom: 8 }}>解析：</Text>
+                                <MathText content={item.explanation || '暂无解析'} fontSize={16} color={theme.colors.onSurfaceVariant} />
+                            </ScrollView>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.scrollItem}>
+                <Card style={[styles.card, viewMode === 'scroll' && { marginBottom: 16 }]} mode={viewMode === 'scroll' ? 'elevated' : 'contained'}>
+                    <Card.Content>
+                        <View style={styles.questionTextContainer}>
+                            {viewMode === 'scroll' && <Text variant="labelLarge" style={{ marginRight: 8, color: theme.colors.primary }}>#{index + 1}</Text>}
+                            <View style={[styles.typeBadge, { backgroundColor: getTypeColor(item.type, theme) }]}>
+                                <Text style={styles.typeBadgeText}>{getTypeLabel(item.type)}</Text>
+                            </View>
+                            <MathText content={item.content} fontSize={18} baseStyle={{ flex: 1 }} />
+                        </View>
+                    </Card.Content>
+                </Card>
+
+                <View style={styles.optionsContainer}>
+                    <OptionsRenderer
+                        question={item}
+                        options={options}
+                        selectedAnswer={itemSelectedAnswer}
+                        setSelectedAnswer={(val: any) => {
+                            if (viewMode === 'scroll') {
+                                submitAnswer(index, val);
+                            } else {
+                                setSelectedAnswer(val);
+                            }
+                        }}
+                        showResult={itemShowResult}
+                        theme={theme}
+                        quizMode={quizMode}
+                    />
+                </View>
+
+                {viewMode === 'scroll' && quizMode === 'practice' && !itemShowResult && (
+                    <Button
+                        mode="contained-tonal"
+                        disabled={item.type === 'multi' ? (!itemSelectedAnswer || itemSelectedAnswer.length === 0) : !itemSelectedAnswer}
+                        onPress={() => checkAnswerForIndex(index, itemSelectedAnswer)}
+                        style={{ marginHorizontal: 16, marginBottom: 8 }}
+                    >
+                        提交答案
+                    </Button>
+                )}
+
+                {(itemShowResult) && (
+                    <ResultFeedback
+                        showResult={true}
+                        isCorrect={quizMode === 'study' ? (item.type === 'multi' ? false : true) : itemIsCorrect}
+                        theme={theme}
+                        correct_answer={item.correct_answer}
+                        explanation={item.explanation}
+                    />
+                )}
+                {viewMode === 'scroll' && <Divider style={{ marginVertical: 16 }} />}
+            </View>
+        );
+    };
 
     return (
         <>
@@ -103,56 +222,47 @@ export default function QuizScreen() {
                     keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
                 >
                     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-                        <ProgressBar progress={(currentIndex + 1) / questions.length} color={theme.colors.primary} style={styles.progressBar} />
+                        {viewMode === 'page' && <ProgressBar progress={(currentIndex + 1) / questions.length} color={theme.colors.primary} style={styles.progressBar} />}
 
-                        <ScrollView
-                            contentContainerStyle={styles.scrollContent}
-                            keyboardShouldPersistTaps="handled"
-                            showsVerticalScrollIndicator={false}
-                        >
-                            <Card style={styles.card} mode="contained">
-                                <Card.Content>
-                                    <View style={styles.questionTextContainer}>
-                                        <View style={[styles.typeBadge, { backgroundColor: getTypeColor(currentQuestion.type, theme) }]}>
-                                            <Text style={styles.typeBadgeText}>{getTypeLabel(currentQuestion.type)}</Text>
-                                        </View>
-                                        <MathText content={currentQuestion.content} fontSize={18} baseStyle={{ flex: 1 }} />
-                                    </View>
-                                </Card.Content>
-                            </Card>
-
-                            <View style={styles.optionsContainer}>
-                                <OptionsRenderer
-                                    question={currentQuestion}
-                                    options={options}
-                                    selectedAnswer={selectedAnswer}
-                                    setSelectedAnswer={setSelectedAnswer}
-                                    showResult={showResult}
-                                    theme={theme}
-                                />
-                            </View>
-
-                            <ResultFeedback
-                                showResult={showResult}
-                                isCorrect={isCorrect}
-                                theme={theme}
-                                correct_answer={currentQuestion.correct_answer}
-                                explanation={currentQuestion.explanation}
+                        {viewMode === 'page' || viewMode === 'flashcard' ? (
+                            <ScrollView
+                                contentContainerStyle={[styles.scrollContent, viewMode === 'flashcard' && { flex: 1, justifyContent: 'center' }]}
+                                keyboardShouldPersistTaps="handled"
+                                showsVerticalScrollIndicator={false}
+                                scrollEnabled={viewMode !== 'flashcard'}
+                            >
+                                {renderQuestionItem({ item: questions[currentIndex], index: currentIndex })}
+                            </ScrollView>
+                        ) : (
+                            <FlatList
+                                data={questions}
+                                keyExtractor={(item) => item.id.toString()}
+                                renderItem={renderQuestionItem}
+                                contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 20 }]}
+                                initialScrollIndex={currentIndex >= 0 && currentIndex < questions.length ? currentIndex : 0}
+                                getItemLayout={(_, index) => ({ length: 400, offset: 400 * index, index })}
+                                onScrollToIndexFailed={() => { }}
+                                showsVerticalScrollIndicator={true}
                             />
-                        </ScrollView>
+                        )}
 
-                        <FooterControl
-                            quizMode={quizMode}
-                            currentIndex={currentIndex}
-                            totalCount={questions.length}
-                            showResult={showResult}
-                            selectedAnswer={selectedAnswer}
-                            handlePrev={handlePrev}
-                            handleNext={handleNext}
-                            checkAnswer={checkAnswer}
-                            keyboardHeight={keyboardHeight}
-                            insets={insets}
-                        />
+                        {viewMode !== 'scroll' && (
+                            <FooterControl
+                                viewMode={viewMode}
+                                isFlipped={isFlipped}
+                                quizMode={quizMode}
+                                currentIndex={currentIndex}
+                                totalCount={questions.length}
+                                showResult={showResult}
+                                selectedAnswer={selectedAnswer}
+                                handlePrev={handlePrev}
+                                handleNext={handleNext}
+                                checkAnswer={checkAnswer}
+                                markMastery={markMastery}
+                                keyboardHeight={keyboardHeight}
+                                insets={insets}
+                            />
+                        )}
                     </View>
                 </KeyboardAvoidingView>
             </PanGestureHandler>
@@ -172,7 +282,7 @@ export default function QuizScreen() {
 
 // --- Sub Components ---
 
-function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer, showResult, theme }: any) {
+function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer, showResult, theme, quizMode }: any) {
     const disabled = showResult;
 
     if (question.type === 'single' || question.type === 'true_false') {
@@ -186,29 +296,42 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
             <View>
                 {entries.map(([key, value]: any) => {
                     const isSelected = selectedAnswer === key;
+                    const isCorrect = question.correct_answer === key;
+                    const isRevealed = showResult || quizMode === 'study';
+                    const highlight = isSelected || (quizMode === 'study' && isCorrect);
+
                     return (
                         <TouchableOpacity
                             key={key}
-                            onPress={() => !disabled && setSelectedAnswer(key)}
+                            onPress={() => !disabled && quizMode !== 'study' && setSelectedAnswer(key)}
                             activeOpacity={0.7}
                             style={[
                                 styles.optionRow,
                                 {
-                                    backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface,
-                                    borderColor: isSelected ? theme.colors.primary : 'transparent',
-                                    borderWidth: isSelected ? 2 : 1, // Add border for better visibility
-                                    elevation: 2, // Slight shadow
+                                    backgroundColor: highlight
+                                        ? (isRevealed ? (isCorrect ? '#E8F5E9' : theme.colors.secondaryContainer) : theme.colors.secondaryContainer)
+                                        : theme.colors.surface,
+                                    borderColor: highlight
+                                        ? (isRevealed ? (isCorrect ? '#4CAF50' : theme.colors.primary) : theme.colors.primary)
+                                        : 'transparent',
+                                    borderWidth: highlight ? 2 : 1,
                                 }
                             ]}
                         >
                             <View pointerEvents="none">
-                                <RadioButton value={key} status={isSelected ? 'checked' : 'unchecked'} />
+                                <RadioButton
+                                    value={key}
+                                    status={highlight ? 'checked' : 'unchecked'}
+                                    color={isRevealed && isCorrect ? '#4CAF50' : undefined}
+                                />
                             </View>
                             <View style={styles.optionContent}>
                                 <MathText
                                     content={isBool ? value : `${key}. ${value}`}
                                     fontSize={16}
-                                    color={isSelected ? theme.colors.onSecondaryContainer : theme.colors.onSurface}
+                                    color={highlight
+                                        ? (isRevealed ? (isCorrect ? '#2E7D32' : theme.colors.onSecondaryContainer) : theme.colors.onSecondaryContainer)
+                                        : theme.colors.onSurface}
                                 />
                             </View>
                         </TouchableOpacity>
@@ -220,6 +343,8 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
 
     if (question.type === 'multi') {
         const currentSelected = (selectedAnswer as string[]) || [];
+        const correctAnswers = question.correct_answer.split('');
+
         const toggle = (key: string) => {
             if (currentSelected.includes(key)) {
                 setSelectedAnswer(currentSelected.filter(k => k !== key));
@@ -236,29 +361,41 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
             <View>
                 {entries.map(([key, value]: any) => {
                     const isSelected = currentSelected.includes(key);
+                    const isCorrect = correctAnswers.includes(key);
+                    const isRevealed = showResult || quizMode === 'study';
+                    const highlight = isSelected || (quizMode === 'study' && isCorrect);
+
                     return (
                         <TouchableOpacity
                             key={key}
-                            onPress={() => !disabled && toggle(key)}
+                            onPress={() => !disabled && quizMode !== 'study' && toggle(key)}
                             activeOpacity={0.7}
                             style={[
                                 styles.optionRow,
                                 {
-                                    backgroundColor: isSelected ? theme.colors.secondaryContainer : theme.colors.surface,
-                                    borderColor: isSelected ? theme.colors.primary : 'transparent',
-                                    borderWidth: isSelected ? 2 : 1,
-                                    elevation: 2,
+                                    backgroundColor: highlight
+                                        ? (isRevealed ? (isCorrect ? '#E8F5E9' : theme.colors.secondaryContainer) : theme.colors.secondaryContainer)
+                                        : theme.colors.surface,
+                                    borderColor: highlight
+                                        ? (isRevealed ? (isCorrect ? '#4CAF50' : theme.colors.primary) : theme.colors.primary)
+                                        : 'transparent',
+                                    borderWidth: highlight ? 2 : 1,
                                 }
                             ]}
                         >
                             <View pointerEvents="none">
-                                <Checkbox status={isSelected ? 'checked' : 'unchecked'} />
+                                <Checkbox
+                                    status={highlight ? 'checked' : 'unchecked'}
+                                    color={isRevealed && isCorrect ? '#4CAF50' : undefined}
+                                />
                             </View>
                             <View style={styles.optionContent}>
                                 <MathText
                                     content={`${key}. ${value}`}
                                     fontSize={16}
-                                    color={isSelected ? theme.colors.onSecondaryContainer : theme.colors.onSurface}
+                                    color={highlight
+                                        ? (isRevealed ? (isCorrect ? '#2E7D32' : theme.colors.onSecondaryContainer) : theme.colors.onSecondaryContainer)
+                                        : theme.colors.onSurface}
                                 />
                             </View>
                         </TouchableOpacity>
@@ -307,7 +444,43 @@ function ResultFeedback({ showResult, isCorrect, theme, correct_answer, explanat
     );
 }
 
-function FooterControl({ quizMode, currentIndex, totalCount, showResult, selectedAnswer, handlePrev, handleNext, checkAnswer, keyboardHeight, insets }: any) {
+function FooterControl({ viewMode, isFlipped, quizMode, currentIndex, totalCount, showResult, selectedAnswer, handlePrev, handleNext, checkAnswer, markMastery, keyboardHeight, insets }: any) {
+    if (viewMode === 'flashcard') {
+        return (
+            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16), paddingTop: 12 }]}>
+                {!isFlipped ? (
+                    <View style={styles.footerButtons}>
+                        <Button mode="outlined" onPress={handlePrev} disabled={currentIndex === 0} style={styles.navButton}>
+                            上一题
+                        </Button>
+                        <Button mode="contained" onPress={handleNext} disabled={currentIndex === totalCount - 1} style={styles.navButton}>
+                            下一题
+                        </Button>
+                    </View>
+                ) : (
+                    <View style={styles.footerButtons}>
+                        <Button
+                            mode="contained"
+                            onPress={() => markMastery(false)}
+                            style={[styles.masteryButton, { backgroundColor: '#F44336' }]}
+                            icon="close-circle"
+                        >
+                            没记住
+                        </Button>
+                        <Button
+                            mode="contained"
+                            onPress={() => markMastery(true)}
+                            style={[styles.masteryButton, { backgroundColor: '#4CAF50' }]}
+                            icon="check-circle"
+                        >
+                            记住了
+                        </Button>
+                    </View>
+                )}
+            </View>
+        );
+    }
+
     return (
         <View style={[
             styles.footer,
@@ -428,17 +601,27 @@ function getTypeColor(type: string, theme: any) {
     return map[type] || theme.colors.secondaryContainer;
 }
 
+const ActivityIndicator = ({ size, style }: any) => {
+    const theme = useTheme();
+    return <View style={[{ transform: [{ scale: size === 'large' ? 1.5 : 1 }] }, style]}><Text style={{ color: theme.colors.primary, fontSize: 32 }}>⏳</Text></View>;
+};
+
 const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     progressBar: { height: 3 },
     scrollContent: { padding: 16, paddingBottom: 24 },
+    scrollItem: { marginBottom: 8 },
     card: { marginBottom: 20, borderRadius: 16 },
     questionTextContainer: { flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'wrap' },
     typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginRight: 8, marginTop: 4, alignSelf: 'flex-start' },
     typeBadgeText: { fontSize: 12, fontWeight: 'bold', color: '#555' },
     optionsContainer: { marginBottom: 20 },
-    // New Option Layout Styles
+    flashcardContainer: { flex: 1, padding: 10, minHeight: 400 },
+    flashcard: { flex: 1, borderRadius: 24, borderWidth: 1, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+    flashcardPart: { flex: 1, padding: 24 },
+    tapTip: { textAlign: 'center', color: '#999', fontSize: 12, marginTop: 40 },
+    masteryButton: { flex: 1, marginHorizontal: 8, borderRadius: 12, height: 48, justifyContent: 'center' },
     optionRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -447,7 +630,6 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         marginBottom: 10,
         backgroundColor: 'white',
-        // Default border
         borderWidth: 1,
         borderColor: 'transparent'
     },
