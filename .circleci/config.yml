@@ -17,14 +17,23 @@ jobs:
       - run:
           name: Install CMake and Ninja
           command: |
-            # Try to install via pip first to avoid apt issues
+            # Method 1: Try pip (fastest & cleanest)
             if command -v pip3 &> /dev/null; then
-              sudo pip3 install cmake ninja
-            else
-              sudo apt-get update && sudo apt-get install -y cmake ninja-build
+              echo "Installing via pip..."
+              sudo pip3 install cmake ninja && success=1
+            fi
+
+            # Method 2: Direct Download if pip failed (Avoids apt GPG/Network issues)
+            if [ -z "$success" ]; then
+              echo "Pip failed. Downloading Ninja binary directly..."
+              wget -q https://github.com/ninja-build/ninja/releases/download/v1.11.1/ninja-linux.zip
+              unzip -q ninja-linux.zip
+              sudo mv ninja /usr/local/bin/
+              sudo chmod +x /usr/local/bin/ninja
             fi
             
             echo "Installing Android SDK components..."
+            mkdir -p ~/.android && touch ~/.android/repositories.cfg
             yes | sdkmanager "cmake;3.22.1" "ndk;25.1.8937393"
 
       - run:
