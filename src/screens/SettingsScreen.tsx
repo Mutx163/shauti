@@ -92,6 +92,27 @@ export default function SettingsScreen() {
                     </Card.Content>
                 </Card>
 
+                {/* 在线题库订阅 */}
+                <Card style={styles.card} mode="elevated">
+                    <Card.Content>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <View style={{ flex: 1, marginRight: 16 }}>
+                                <Text variant="titleMedium">在线题库订阅</Text>
+                                <Text variant="bodySmall" style={{ color: 'gray', marginTop: 4 }}>
+                                    订阅远程题库链接，自动获取最新题目更新
+                                </Text>
+                            </View>
+                            <Button
+                                mode="contained"
+                                onPress={() => navigation.navigate('Subscription')}
+                                icon="rss"
+                            >
+                                管理订阅
+                            </Button>
+                        </View>
+                    </Card.Content>
+                </Card>
+
                 {/* 刷题设置 */}
                 <Card style={styles.card} mode="elevated">
                     <Card.Content>

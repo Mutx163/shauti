@@ -9,6 +9,7 @@ import { theme } from './src/theme/theme';
 import { initDatabase } from './src/db/database';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SubscriptionService } from './src/services/SubscriptionService';
 
 // Screens
 import HomeScreen from './src/screens/HomeScreen';
@@ -25,6 +26,7 @@ import StatsScreen from './src/screens/StatsScreen';
 import ManualAddScreen from './src/screens/ManualAddScreen';
 import SrsReviewScreen from './src/screens/SrsReviewScreen';
 import MasteryListScreen from './src/screens/MasteryListScreen';
+import SubscriptionScreen from './src/screens/SubscriptionScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createMaterialTopTabNavigator();
@@ -95,7 +97,16 @@ function getHeaderTitle(route: any) {
 
 export default function App() {
     useEffect(() => {
-        initDatabase();
+        const init = async () => {
+            await initDatabase();
+            // Non-blocking auto-sync with 3s delay to ensure network is ready
+            setTimeout(() => {
+                SubscriptionService.autoSyncAll().then(count => {
+                    if (count > 0) console.log(`${count} 个订阅已完成自动同步`);
+                });
+            }, 3000);
+        };
+        init();
     }, []);
 
     return (
@@ -140,6 +151,7 @@ export default function App() {
                             <Stack.Screen name="ManualAdd" component={ManualAddScreen} options={{ title: '手动添加题目' }} />
                             <Stack.Screen name="SrsReview" component={SrsReviewScreen} options={{ title: '今日复习' }} />
                             <Stack.Screen name="MasteryList" component={MasteryListScreen} options={({ route }: any) => ({ title: route.params?.bankName || '掌握清单' })} />
+                            <Stack.Screen name="Subscription" component={SubscriptionScreen} options={{ title: '订阅管理' }} />
                         </Stack.Navigator>
                     </NavigationContainer>
                 </PaperProvider>
