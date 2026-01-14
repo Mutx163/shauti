@@ -17,7 +17,13 @@ jobs:
       - run:
           name: Install CMake and Ninja
           command: |
-            sudo apt-get update && sudo apt-get install -y cmake ninja-build
+            # Try to install via pip first to avoid apt issues
+            if command -v pip3 &> /dev/null; then
+              sudo pip3 install cmake ninja
+            else
+              sudo apt-get update && sudo apt-get install -y cmake ninja-build
+            fi
+            
             echo "Installing Android SDK components..."
             yes | sdkmanager "cmake;3.22.1" "ndk;25.1.8937393"
 
