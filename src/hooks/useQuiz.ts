@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useRoute } from '@react-navigation/native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import { getDB, Question } from '../db/database';
 import { SettingsManager, AutoSkipMode } from '../utils/settings';
 
@@ -13,6 +13,9 @@ export const useQuiz = () => {
         questionType = 'all',
         customQuestions
     } = route.params || {};
+
+    const navigation = useNavigation<any>();
+    const hasResetRef = useRef(false); // 增加重置标记位
 
     const [questions, setQuestions] = useState<Question[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -29,12 +32,14 @@ export const useQuiz = () => {
     const [autoSkipMode, setAutoSkipMode] = useState<AutoSkipMode>('off');
     const [autoRemoveMistake, setAutoRemoveMistake] = useState(true);
 
-    const SRS_INTERVALS = [0, 1, 3, 7, 15, 30, 60, 120]; // Scientific intervals (Days)
+    // 艾宾浩斯遗忘曲线标准间隔（天）：1, 2, 4, 7, 15, 31, 90, 180
+    const SRS_INTERVALS = [1, 2, 4, 7, 15, 31, 90, 180];
 
     const saveSession = useCallback(async (index: number, history: Map<number, any>, order?: number[]) => {
         if (!bankId || customQuestions) return;
         const db = getDB();
         try {
+            const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode}`;
             const historyStr = JSON.stringify(Array.from(history.entries()));
             const orderStr = order ? JSON.stringify(order) : null;
             await db.runAsync(
@@ -44,13 +49,13 @@ export const useQuiz = () => {
                     current_index = ?, 
                     answer_history = ?, 
                     question_order = COALESCE(?, question_order)`,
-                bankId, quizMode, index, historyStr, orderStr,
+                bankId, modeKey, index, historyStr, orderStr,
                 index, historyStr, orderStr
             );
         } catch (e) {
             console.error('Failed to save session:', e);
         }
-    }, [bankId, quizMode, customQuestions]);
+    }, [bankId, quizMode, customQuestions, mode]);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -69,13 +74,13 @@ export const useQuiz = () => {
             } else if (mode === 'mistake') {
                 let query = `
                     SELECT q.* FROM questions q
-                    WHERE EXISTS (
-                        SELECT 1 FROM user_progress up 
+                    WHERE EXISTS(
+        SELECT 1 FROM user_progress up 
                         WHERE up.question_id = q.id 
                         AND up.id = (SELECT id FROM user_progress WHERE question_id = q.id ORDER BY timestamp DESC LIMIT 1)
                         AND up.is_correct = 0
                     )
-                `;
+`;
                 let params: any[] = [];
                 if (bankId) {
                     query += ' AND q.bank_id = ?';
@@ -87,7 +92,7 @@ export const useQuiz = () => {
                     SELECT q.* FROM questions q
                     JOIN question_mastery qm ON q.id = qm.question_id
                     WHERE datetime(qm.next_review_time, 'localtime') <= datetime('now', 'localtime')
-                `;
+    `;
                 let params: any[] = [];
                 if (bankId) {
                     query += ' AND q.bank_id = ?';
@@ -107,12 +112,31 @@ export const useQuiz = () => {
             // 3. Load Session
             let savedIndex = 0;
             let savedHistory = new Map();
+
+            // --- 核心修改：通过 mode 隔离会话 ---
+            const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode} `;
+
+            // 如果是 reset 模式，先删除旧会话
+            const { reset = false } = route.params || {};
+            if (reset && bankId && !hasResetRef.current) {
+                hasResetRef.current = true; // 锁定，防止重复执行
+                console.log(`正在重置 ${modeKey} 模式下的会话进度`);
+                try {
+                    await db.runAsync(
+                        'DELETE FROM quiz_sessions WHERE bank_id = ? AND quiz_mode = ?',
+                        bankId, modeKey
+                    );
+                } catch (err) {
+                    console.error('Reset session error', err);
+                }
+            }
+
             const session: any = await db.getFirstAsync(
                 'SELECT * FROM quiz_sessions WHERE bank_id = ? AND quiz_mode = ?',
-                bankId, quizMode
+                bankId, modeKey
             );
 
-            if (bankId && !customQuestions && session) {
+            if (bankId && !customQuestions && session && !reset) {
                 savedIndex = session.current_index || 0;
                 if (session.answer_history) {
                     try {
@@ -138,30 +162,46 @@ export const useQuiz = () => {
             }
 
             // 4. Handle initial order save for new sessions
-            if (result.length > 0 && !session && bankId && !customQuestions) {
+            if (result.length > 0 && (!session || reset) && bankId && !customQuestions) {
                 if (quizMode === 'practice') {
                     result = result.sort(() => Math.random() - 0.5);
                 }
                 const orderIds = result.map(q => q.id);
-                await saveSession(0, new Map(), orderIds);
+                // 使用隔离后的 modeKey 保存会话
+                const historyStr = JSON.stringify([]);
+                const orderStr = JSON.stringify(orderIds);
+                await db.runAsync(
+                    `INSERT INTO quiz_sessions(bank_id, quiz_mode, current_index, answer_history, question_order)
+VALUES(?, ?, ?, ?, ?)`,
+                    bankId, modeKey, 0, historyStr, orderStr
+                );
             }
 
-            setQuestions(result);
-            setCurrentIndex(savedIndex);
+            const finalQuestions = result;
+            const validIndex = Math.min(Math.max(0, savedIndex), Math.max(0, finalQuestions.length - 1));
+
+            setQuestions(finalQuestions);
+            setCurrentIndex(validIndex);
             setAnswerHistory(savedHistory);
 
-            const initialHistory = savedHistory.get(savedIndex);
+            const initialHistory = savedHistory.get(validIndex);
             if (initialHistory) {
                 setSelectedAnswer(initialHistory.selectedAnswer || null);
                 setShowResult(initialHistory.showResult || false);
                 setIsCorrect(initialHistory.isCorrect || false);
+            } else {
+                // 如果没有历史（重置或新题），确保清空当前状态
+                setSelectedAnswer(null);
+                setShowResult(false);
+                setIsCorrect(false);
             }
         } catch (e) {
             console.error('Failed to load quiz data:', e);
         } finally {
             setLoading(false);
         }
-    }, [bankId, mode, customQuestions, questionType, quizMode, saveSession]);
+    }, [bankId, mode, customQuestions, questionType, quizMode, route.params, saveSession]); // 增加 route.params 和 saveSession 依赖
+
 
     useEffect(() => {
         loadData();
@@ -175,14 +215,16 @@ export const useQuiz = () => {
                 questionId
             );
 
-            let level = masteryData[0]?.mastery_level || 0;
+            // 艾宾浩斯逻辑：新题从 -1 开始，首次正确进入 level 0 (待 1 天后复习)
+            let currentLevel = masteryData.length > 0 ? masteryData[0].mastery_level : -1;
+            let level: number;
+
             if (isCorrect) {
-                level = Math.min(level + 1, SRS_INTERVALS.length - 1);
+                // 做对：等级提升 1 级
+                level = Math.min(currentLevel + 1, SRS_INTERVALS.length - 1);
             } else {
-                // Scientific Lapse Logic:
-                // If the user fails at a high level (>3), reset to level 1 to re-learn.
-                // If they fail at a low level, reset to level 0.
-                level = level > 3 ? 1 : 0;
+                // 遗忘回退逻辑：一旦做错，重置到 level 0，即 1 天后重新开始巩固（科学 Lapse 规则）
+                level = 0;
             }
 
             const nextReview = new Date();
@@ -221,8 +263,18 @@ export const useQuiz = () => {
             saveSession(nextIndex, answerHistory);
         } else {
             setCompleted(true);
+            // --- 核心修改：复习/错题完成后清理会话 ---
+            if ((mode === 'review' || mode === 'mistake') && bankId) {
+                const db = getDB();
+                const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode} `;
+                db.runAsync(
+                    'DELETE FROM quiz_sessions WHERE bank_id = ? AND quiz_mode = ?',
+                    bankId, modeKey
+                ).catch(e => console.error('Auto cleanup session error', e));
+            }
         }
-    }, [currentIndex, questions.length, answerHistory, saveSession]);
+    }, [currentIndex, questions.length, answerHistory, saveSession, mode, bankId, quizMode]);
+
 
     const handlePrev = useCallback(() => {
         if (currentIndex > 0) {
@@ -248,21 +300,26 @@ export const useQuiz = () => {
         }
     };
 
-    const checkAnswerInternal = useCallback(async (index: number, answer: any) => {
+    const checkAnswerInternal = useCallback(async (index: number, answer: any, manualCorrectness?: boolean) => {
         const currentQuestion = questions[index];
         if (!currentQuestion) return;
 
         let correct = false;
-        if (currentQuestion.type === 'multi') {
-            const selectedArr = (answer as string[] || []).slice().sort();
-            const correctArr = currentQuestion.correct_answer.split('').slice().sort();
-            correct = JSON.stringify(selectedArr) === JSON.stringify(correctArr);
-        } else if (currentQuestion.type === 'true_false') {
-            correct = answer === currentQuestion.correct_answer;
+
+        if (typeof manualCorrectness === 'boolean') {
+            correct = manualCorrectness;
         } else {
-            const normalizedSelected = answer?.toString().trim().toUpperCase();
-            const normalizedCorrect = currentQuestion.correct_answer.trim().toUpperCase();
-            correct = normalizedSelected === normalizedCorrect;
+            if (currentQuestion.type === 'multi') {
+                const selectedArr = (answer as string[] || []).slice().sort();
+                const correctArr = currentQuestion.correct_answer.split('').slice().sort();
+                correct = JSON.stringify(selectedArr) === JSON.stringify(correctArr);
+            } else if (currentQuestion.type === 'true_false') {
+                correct = answer === currentQuestion.correct_answer;
+            } else {
+                const normalizedSelected = answer?.toString().trim().toUpperCase();
+                const normalizedCorrect = currentQuestion.correct_answer.trim().toUpperCase();
+                correct = normalizedSelected === normalizedCorrect;
+            }
         }
 
         // Update local status if it's the current question
@@ -278,13 +335,24 @@ export const useQuiz = () => {
 
         try {
             const db = getDB();
-            await db.runAsync(
-                'INSERT INTO user_progress (question_id, is_correct) VALUES (?, ?)',
-                currentQuestion.id,
-                correct ? 1 : 0
-            );
 
-            await updateSRSMastery(currentQuestion.id, correct);
+            // --- 核心修改：逻辑解联逻辑 ---
+            // 1. 只有做错，或者在“非复习”模式下做对，才更新错题库状态 (复习做对不自动消除错题)
+            const shouldUpdateProgress = !correct || mode !== 'review';
+            if (shouldUpdateProgress) {
+                await db.runAsync(
+                    'INSERT INTO user_progress (question_id, is_correct) VALUES (?, ?)',
+                    currentQuestion.id,
+                    correct ? 1 : 0
+                );
+            }
+
+            // 2. 只有做错，或者在“非错题”模式下做对，才更新复习计划进度 (练错题不透支正式复习)
+            const shouldUpdateMastery = !correct || mode !== 'mistake';
+            if (shouldUpdateMastery) {
+                await updateSRSMastery(currentQuestion.id, correct);
+            }
+
 
             if (index === currentIndex) {
                 if (correct && autoSkipMode === 'correct_only') {
@@ -323,6 +391,31 @@ export const useQuiz = () => {
         await checkAnswerInternal(currentIndex, selectedAnswer);
     }, [currentIndex, selectedAnswer, checkAnswerInternal]);
 
+    const resetQuiz = useCallback(async () => {
+        if (!bankId || customQuestions) return;
+        const db = getDB();
+        try {
+            const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode} `;
+            await db.runAsync(
+                'DELETE FROM quiz_sessions WHERE bank_id = ? AND quiz_mode = ?',
+                bankId, modeKey
+            );
+
+            // 重置内存状态
+            setCurrentIndex(0);
+            setAnswerHistory(new Map());
+            setSelectedAnswer(null);
+            setShowResult(false);
+            setIsCorrect(false);
+            setCompleted(false);
+
+            // 重新加载数据（或者简单地重新洗牌并保存新秩序）
+            await loadData();
+        } catch (e) {
+            console.error('Failed to reset quiz:', e);
+        }
+    }, [bankId, customQuestions, mode, quizMode, loadData]);
+
     return {
         questions,
         currentIndex,
@@ -340,7 +433,9 @@ export const useQuiz = () => {
         markMastery,
         handleNext,
         handlePrev,
+        resetQuiz, // 导出 resetQuiz
         bankName,
-        quizMode
+        quizMode,
+        mode // 也导出 mode 方便 UI 判断
     };
 };

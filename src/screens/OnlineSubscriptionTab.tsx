@@ -4,9 +4,9 @@ import { Text, Card, FAB, Portal, Dialog, TextInput, Button, IconButton, useThem
 import { useNavigation } from '@react-navigation/native';
 import { SubscriptionService } from '../services/SubscriptionService';
 
-export default function SubscriptionScreen() {
+export default function OnlineSubscriptionTab() {
     const theme = useTheme();
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
     const [subscriptions, setSubscriptions] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [dialogVisible, setDialogVisible] = useState(false);
@@ -50,7 +50,16 @@ export default function SubscriptionScreen() {
             setUrl('');
             setName('');
             loadSubscriptions();
-            Alert.alert('成功', '订阅添加并同步成功');
+
+            // 导航回首页以触发数据刷新
+            Alert.alert('成功', '订阅添加并同步成功，即将返回首页', [
+                {
+                    text: '确定',
+                    onPress: () => {
+                        navigation.navigate('Main', { screen: 'HomeTab' });
+                    }
+                }
+            ]);
         } catch (e: any) {
             Alert.alert('添加失败', e.message);
         } finally {
@@ -63,7 +72,17 @@ export default function SubscriptionScreen() {
         try {
             await SubscriptionService.syncSubscription(id);
             loadSubscriptions();
-            Alert.alert('同步成功', '题库已更新到最新版本');
+
+            // 导航回首页以触发数据刷新
+            Alert.alert('同步成功', '题库已更新到最新版本，即将返回首页', [
+                {
+                    text: '确定',
+                    onPress: () => {
+                        // @ts-ignore - navigation from parent
+                        navigation.navigate('Main', { screen: 'HomeTab' });
+                    }
+                }
+            ]);
         } catch (e: any) {
             Alert.alert('同步失败', e.message);
         } finally {
@@ -90,7 +109,7 @@ export default function SubscriptionScreen() {
     };
 
     const renderItem = ({ item }: { item: any }) => (
-        <Card style={styles.card} mode="elevated">
+        <Card style={[styles.card, { shadowColor: theme.colors.shadow }]} mode="elevated">
             <Card.Content>
                 <View style={styles.cardHeader}>
                     <View style={{ flex: 1 }}>
@@ -203,6 +222,6 @@ const styles = StyleSheet.create({
         position: 'absolute',
         margin: 16,
         right: 0,
-        bottom: 0,
+        bottom: 16, // Fixed FAB bottom position
     },
 });

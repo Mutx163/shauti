@@ -109,25 +109,45 @@ export default function MistakeScreen() {
     const renderHeader = () => (
         <View style={{ marginBottom: 24 }}>
             <Card
-                style={{ backgroundColor: theme.colors.primaryContainer, marginBottom: 16 }}
+                style={{ 
+                    backgroundColor: theme.colors.primary, 
+                    marginBottom: 20, 
+                    borderRadius: 16,
+                    elevation: 4,
+                    shadowColor: theme.colors.shadow 
+                }}
                 onPress={() => navigation.navigate('MockConfig')}
                 mode="elevated"
             >
-                <Card.Title
-                    title="全真模拟考试"
-                    subtitle="随机抽题 · 限时测验 · 智能组卷"
-                    titleVariant="titleMedium"
-                    subtitleVariant="bodySmall"
-                    left={(props) => <Avatar.Icon {...props} icon="clipboard-text-clock" style={{ backgroundColor: theme.colors.primary }} />}
-                    right={(props) => <IconButton {...props} icon="chevron-right" />}
-                />
+                <Card.Content style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 20 }}>
+                    <View style={{ 
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)', 
+                        borderRadius: 12, 
+                        padding: 10,
+                        marginRight: 16 
+                    }}>
+                        <Avatar.Icon 
+                            size={32} 
+                            icon="clipboard-text-clock" 
+                            style={{ backgroundColor: 'transparent' }} 
+                            color="#FFFFFF" 
+                        />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text variant="titleLarge" style={{ color: '#FFFFFF', fontWeight: 'bold' }}>全真模拟考试</Text>
+                        <Text variant="bodySmall" style={{ color: 'rgba(255, 255, 255, 0.8)', marginTop: 2 }}>
+                            基于艾宾浩斯曲线 · 智能组卷
+                        </Text>
+                    </View>
+                    <IconButton icon="chevron-right" iconColor="#FFFFFF" />
+                </Card.Content>
             </Card>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>错题专项复习</Text>
                     {groupedMistakes.length === 0 && (
-                        <Text variant="bodySmall" style={{ color: 'gray', marginLeft: 8 }}>暂无错题</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.outline, marginLeft: 8 }}>暂无错题</Text>
                     )}
                 </View>
                 {groupedMistakes.length > 0 && (
@@ -153,12 +173,23 @@ export default function MistakeScreen() {
                 contentContainerStyle={{ padding: 16 }}
                 ListHeaderComponent={renderHeader}
                 renderItem={({ item }) => (
-                    <Card style={styles.bankCard} mode="elevated">
+                    <Card
+                        key={item.bankId}
+                        style={[
+                            styles.bankCard,
+                            {
+                                backgroundColor: theme.colors.surface,
+                                borderColor: theme.colors.outlineVariant,
+                                shadowColor: theme.colors.shadow,
+                            }
+                        ]}
+                        mode="elevated"
+                    >
                         <Card.Content style={{ padding: 16 }}>
                             {/* 头部区域 - 圆角卡片 */}
-                            <View style={[styles.cardHeader, { backgroundColor: theme.colors.primaryContainer }]}>
+                            <View style={[styles.cardHeader, { backgroundColor: theme.colors.surfaceVariant }]}>
                                 <View style={{ flex: 1 }}>
-                                    <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onPrimaryContainer }}>
+                                    <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant }}>
                                         {item.bankName}
                                     </Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
@@ -182,9 +213,10 @@ export default function MistakeScreen() {
                                         onPress={() => navigation.navigate('Quiz', {
                                             mode: 'mistake',
                                             bankId: item.bankId,
-                                            bankName: item.bankName
+                                            bankName: item.bankName,
+                                            reset: true // 强制重置进度，以便重新练习
                                         })}
-                                        icon="pencil"
+                                        icon="play"
                                         buttonColor={theme.colors.primary}
                                         style={{ borderRadius: 20 }}
                                     >
@@ -266,10 +298,9 @@ const styles = StyleSheet.create({
     emptyContainer: { justifyContent: 'center', alignItems: 'center' },
     bankCard: {
         marginBottom: 16,
-        borderRadius: 16,
-        overflow: 'hidden',
+        borderRadius: 20,
+        borderWidth: 1,
         elevation: 3,
-        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,

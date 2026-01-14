@@ -78,7 +78,7 @@ export default function SrsReviewScreen() {
                 <Avatar.Icon icon="calendar-check" size={48} style={{ backgroundColor: theme.colors.primary }} />
                 <View style={{ marginLeft: 16 }}>
                     <Text variant="headlineSmall" style={{ fontWeight: 'bold' }}>今日复习计划</Text>
-                    <Text variant="bodyMedium" style={{ color: 'gray' }}>
+                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                         共有 {totalDue} 道题目等待巩固
                     </Text>
                 </View>
@@ -96,12 +96,12 @@ export default function SrsReviewScreen() {
                 contentContainerStyle={{ padding: 16 }}
                 ListHeaderComponent={renderHeader}
                 renderItem={({ item }) => (
-                    <Card style={styles.bankCard} mode="elevated">
+                    <Card style={[styles.bankCard, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="elevated">
                         <Card.Content style={{ padding: 16 }}>
                             {/* 头部区域 - 圆角卡片 */}
-                            <View style={[styles.cardHeader, { backgroundColor: theme.colors.tertiaryContainer }]}>
+                            <View style={[styles.cardHeader, { backgroundColor: theme.colors.surfaceVariant }]}>
                                 <View style={{ flex: 1 }}>
-                                    <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onTertiaryContainer }}>
+                                    <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant }}>
                                         {item.bankName}
                                     </Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
@@ -117,7 +117,8 @@ export default function SrsReviewScreen() {
                                     onPress={() => navigation.navigate('Quiz', {
                                         mode: 'review',
                                         bankId: item.bankId,
-                                        bankName: item.bankName
+                                        bankName: item.bankName,
+                                        reset: true // 强制重置复习进度，确保加载最新到期题目
                                     })}
                                     icon="pencil"
                                     buttonColor={theme.colors.primary}
@@ -166,7 +167,6 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         borderRadius: 16,
         elevation: 3,
-        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,

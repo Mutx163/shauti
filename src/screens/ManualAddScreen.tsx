@@ -120,7 +120,7 @@ export default function ManualAddScreen() {
             <View style={styles.content}>
                 {!isExistingBank ? (
                     <View>
-                        <Card style={styles.card} mode="elevated">
+                        <Card style={[styles.card, { shadowColor: theme.colors.shadow }]} mode="elevated">
                             <Card.Content>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                                     <IconButton icon="plus-box" iconColor={theme.colors.primary} />
@@ -142,7 +142,7 @@ export default function ManualAddScreen() {
 
                         <Divider style={{ marginVertical: 20 }} />
 
-                        <Card style={styles.card} mode="outlined" onPress={() => setShowBankPicker(true)}>
+                        <Card style={[styles.card, { shadowColor: theme.colors.shadow }]} mode="outlined" onPress={() => setShowBankPicker(true)}>
                             <Card.Title
                                 title="选择已有题库"
                                 subtitle="向现有的题库中追加题目"
@@ -153,17 +153,17 @@ export default function ManualAddScreen() {
                     </View>
                 ) : (
                     <View>
-                        <View style={styles.headerInfo}>
+                        <View style={[styles.headerInfo, { backgroundColor: theme.colors.surfaceVariant + '40' }]}>
                             <View>
                                 <Text variant="titleMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>{bankName}</Text>
-                                <Text variant="bodySmall" style={{ color: 'gray' }}>当前题量：{count}</Text>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>当前题量：{count}</Text>
                             </View>
                             <Button mode="text" onPress={() => setIsExistingBank(false)}>更换</Button>
                         </View>
 
-                        <Card style={styles.card} mode="outlined">
+                        <Card style={[styles.card, { shadowColor: theme.colors.shadow }]} mode="outlined">
                             <Card.Content>
-                                <Text variant="labelLarge" style={{ marginBottom: 8, opacity: 0.7 }}>题目类型</Text>
+                                <Text variant="labelLarge" style={{ marginBottom: 8, opacity: 0.7, color: theme.colors.onSurface }}>题目类型</Text>
                                 <SegmentedButtons
                                     value={type}
                                     onValueChange={v => setType(v as QuestionType)}
@@ -187,15 +187,15 @@ export default function ManualAddScreen() {
                                 />
 
                                 {content.trim() !== '' && (
-                                    <View style={styles.previewBox}>
-                                        <Text variant="labelSmall" style={{ marginBottom: 4, color: 'gray' }}>LaTeX 预览：</Text>
-                                        <MathText content={content} fontSize={16} />
+                                    <View style={[styles.previewBox, { backgroundColor: theme.colors.surfaceVariant + '33', borderColor: theme.colors.outlineVariant }]}>
+                                        <Text variant="labelSmall" style={{ marginBottom: 4, color: theme.colors.outline }}>LaTeX 预览：</Text>
+                                        <MathText content={content} fontSize={16} color={theme.colors.onSurface} />
                                     </View>
                                 )}
 
                                 {(type === 'single' || type === 'multi') && (
                                     <View style={{ marginBottom: 16 }}>
-                                        <Text variant="labelLarge" style={{ marginBottom: 8, opacity: 0.7 }}>选项内容</Text>
+                                        <Text variant="labelLarge" style={{ marginBottom: 8, opacity: 0.7, color: theme.colors.onSurface }}>选项内容</Text>
                                         {(['A', 'B', 'C', 'D'] as const).map(opt => (
                                             <TextInput
                                                 key={opt}
@@ -283,16 +283,13 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         paddingHorizontal: 8,
         paddingVertical: 12,
-        backgroundColor: 'rgba(0,0,0,0.03)',
         borderRadius: 12
     },
     previewBox: {
         padding: 16,
-        backgroundColor: '#fafafa',
         borderRadius: 12,
         marginBottom: 20,
         borderWidth: 1,
-        borderColor: '#eee',
         borderStyle: 'dashed'
     },
     modalContent: {

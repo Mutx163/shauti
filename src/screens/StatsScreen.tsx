@@ -131,13 +131,13 @@ export default function StatsScreen() {
             const level0 = totalQuestions - masteryRes.reduce((acc, r) => acc + r.count, 0);
 
             const rawData = [
-                { value: level0, label: '0', color: '#e0e0e0' },
-                { value: masteryCounts[1] || 0, label: '1', color: '#C6E48B' },
-                { value: masteryCounts[2] || 0, label: '2', color: '#7BC96F' },
-                { value: masteryCounts[3] || 0, label: '3', color: '#239A3B' },
-                { value: masteryCounts[4] || 0, label: '4', color: '#196127' },
-                { value: masteryCounts[5] || 0, label: '5', color: '#12451C' },
-                { value: (masteryCounts[6] || 0) + (masteryCounts[7] || 0), label: '6+', color: '#0A2B12' },
+                { value: level0, label: '0', color: theme.colors.outlineVariant + '33' },
+                { value: masteryCounts[1] || 0, label: '1', color: theme.colors.primary + '33' },
+                { value: masteryCounts[2] || 0, label: '2', color: theme.colors.primary + '66' },
+                { value: masteryCounts[3] || 0, label: '3', color: theme.colors.primary + '99' },
+                { value: masteryCounts[4] || 0, label: '4', color: theme.colors.primary + 'CC' },
+                { value: masteryCounts[5] || 0, label: '5', color: theme.colors.primary },
+                { value: (masteryCounts[6] || 0) + (masteryCounts[7] || 0), label: '6+', color: theme.colors.onPrimaryContainer },
             ];
 
             const currentMax = Math.max(...rawData.map(d => d.value), 10);
@@ -148,7 +148,7 @@ export default function StatsScreen() {
                 label: item.label,
                 frontColor: item.color,
                 topLabelComponent: () => (
-                    <Text style={{ fontSize: 9, marginBottom: 2, textAlign: 'center', width: 25 }}>{item.value}</Text>
+                    <Text style={{ fontSize: 9, marginBottom: 2, textAlign: 'center', width: 25, color: theme.colors.onSurfaceVariant }}>{item.value}</Text>
                 ),
             }));
 
@@ -175,7 +175,20 @@ export default function StatsScreen() {
                     <Chip
                         selected={selectedBankId === null}
                         onPress={() => setSelectedBankId(null)}
-                        style={styles.chip}
+                        mode="outlined"
+                        style={[
+                            styles.chip,
+                            { 
+                                backgroundColor: selectedBankId === null ? theme.colors.primary : theme.colors.surface,
+                                borderColor: selectedBankId === null ? theme.colors.primary : theme.colors.outline,
+                            }
+                        ]}
+                        selectedColor={theme.colors.onPrimary}
+                        textStyle={{ 
+                            color: selectedBankId === null ? theme.colors.onPrimary : theme.colors.onSurfaceVariant,
+                            fontSize: 13
+                        }}
+                        showSelectedCheck={false}
                     >
                         全局统计
                     </Chip>
@@ -184,7 +197,20 @@ export default function StatsScreen() {
                             key={bank.id}
                             selected={selectedBankId === bank.id}
                             onPress={() => setSelectedBankId(bank.id)}
-                            style={styles.chip}
+                            mode="outlined"
+                            style={[
+                                styles.chip,
+                                { 
+                                    backgroundColor: selectedBankId === bank.id ? theme.colors.primary : theme.colors.surface,
+                                    borderColor: selectedBankId === bank.id ? theme.colors.primary : theme.colors.outline,
+                                }
+                            ]}
+                            selectedColor={theme.colors.onPrimary}
+                            textStyle={{ 
+                                color: selectedBankId === bank.id ? theme.colors.onPrimary : theme.colors.onSurfaceVariant,
+                                fontSize: 13
+                            }}
+                            showSelectedCheck={false}
                         >
                             {bank.name}
                         </Chip>
@@ -192,41 +218,48 @@ export default function StatsScreen() {
                 </ScrollView>
 
                 <View style={styles.grid}>
-                    <Card style={[styles.card, { backgroundColor: theme.colors.secondaryContainer }]}>
+                    <Card style={[styles.card, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="outlined">
                         <Card.Content>
-                            <Text variant="titleLarge" style={{ color: theme.colors.onSecondaryContainer }}>{stats.totalAnswered}</Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSecondaryContainer }}>累计刷题</Text>
+                            <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>{stats.totalAnswered}</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>累计刷题</Text>
                         </Card.Content>
                     </Card>
-                    <Card style={styles.card}>
+                    <Card style={[styles.card, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="outlined">
                         <Card.Content>
-                            <Text variant="titleLarge" style={{ color: stats.accuracy >= 60 ? '#4CAF50' : '#F44336' }}>
+                            <Text variant="titleLarge" style={{ color: stats.accuracy >= 60 ? (theme.colors.primary === '#006D3A' ? '#4CAF50' : theme.colors.primary) : theme.colors.error }}>
                                 {stats.accuracy}%
                             </Text>
-                            <Text variant="bodySmall">正确率</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>正确率</Text>
                         </Card.Content>
                     </Card>
-                    <Card style={styles.card}>
+                    <Card style={[styles.card, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="outlined">
                         <Card.Content>
-                            <Text variant="titleLarge">{stats.mistakeCount}</Text>
-                            <Text variant="bodySmall">错题数</Text>
+                            <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>{stats.mistakeCount}</Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>错题数</Text>
                         </Card.Content>
                     </Card>
                 </View>
 
                 {/* Heatmap */}
-                <Card style={styles.chartCard} mode="outlined">
-                    <Card.Title title="学习热力图" subtitle="最近 90 天的学习频率" />
+                <Card style={[styles.chartCard, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="outlined">
+                    <Card.Title 
+                        title="学习热力图" 
+                        subtitle="最近 90 天的学习频率" 
+                        titleStyle={{ color: theme.colors.onSurface }}
+                        subtitleStyle={{ color: theme.colors.onSurfaceVariant }}
+                    />
                     <Card.Content>
                         <StudyHeatmap data={heatmapData} theme={theme} />
                     </Card.Content>
                 </Card>
 
                 {/* Forgetting Curve Distribution */}
-                <Card style={styles.chartCard} mode="outlined">
+                <Card style={[styles.chartCard, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="outlined">
                     <Card.Title
                         title="艾宾浩斯记忆分布"
                         subtitle="题目在不同掌握阶段的分布数量"
+                        titleStyle={{ color: theme.colors.onSurface }}
+                        subtitleStyle={{ color: theme.colors.onSurfaceVariant }}
                     />
                     <Card.Content>
                         {loading ? <ActivityIndicator size="large" /> : (
@@ -244,12 +277,12 @@ export default function StatsScreen() {
                                     yAxisLabelWidth={0}
                                     initialSpacing={10}
                                     endSpacing={10}
-                                    xAxisLabelTextStyle={{ fontSize: 10, color: '#666' }}
+                                    xAxisLabelTextStyle={{ fontSize: 10, color: theme.colors.onSurfaceVariant }}
                                     maxValue={maxMasteryVal * 1.3}
                                 />
                                 <View style={styles.masteryLegend}>
                                     <View style={styles.legendRow}>
-                                        <Text variant="labelSmall" style={{ opacity: 0.6 }}>掌握阶段：0 (未学) → 6+ (永生难忘)</Text>
+                                        <Text variant="labelSmall" style={{ opacity: 0.6, color: theme.colors.onSurfaceVariant }}>掌握阶段：0 (未学) → 6+ (永生难忘)</Text>
                                     </View>
                                 </View>
                             </View>
@@ -272,6 +305,14 @@ function StudyHeatmap({ data, theme }: any) {
         squares.push({ count: found ? found.count : 0 });
     }
 
+    const getHeatColor = (count: number) => {
+        if (count === 0) return theme.colors.outlineVariant + '33';
+        if (count < 5) return theme.colors.primary + '33';
+        if (count < 15) return theme.colors.primary + '66';
+        if (count < 40) return theme.colors.primary + '99';
+        return theme.colors.primary;
+    };
+
     return (
         <View style={styles.heatmapContainer}>
             <View style={styles.heatmapGrid}>
@@ -280,36 +321,30 @@ function StudyHeatmap({ data, theme }: any) {
                 ))}
             </View>
             <View style={styles.heatmapLegend}>
-                <Text style={styles.legendText}>少</Text>
+                <Text style={[styles.legendText, { color: theme.colors.onSurfaceVariant }]}>少</Text>
                 {[0, 2, 10, 30, 50].map((c, i) => (
                     <View key={i} style={[styles.heatmapSquareSmall, { backgroundColor: getHeatColor(c) }]} />
                 ))}
-                <Text style={styles.legendText}>多</Text>
+                <Text style={[styles.legendText, { color: theme.colors.onSurfaceVariant }]}>多</Text>
             </View>
         </View>
     );
 }
 
-function getHeatColor(count: number) {
-    if (count === 0) return '#EBEDF0';
-    if (count < 5) return '#C6E48B';
-    if (count < 15) return '#7BC96F';
-    if (count < 40) return '#239A3B';
-    return '#196127';
-}
+// Remove the global getHeatColor function since it's now inside StudyHeatmap with theme support
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     content: { padding: 12 },
     grid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
     card: { width: '32%', borderRadius: 12 },
-    chartCard: { marginBottom: 12, borderRadius: 12, backgroundColor: 'white' },
+    chartCard: { marginBottom: 12, borderRadius: 12 },
     heatmapContainer: { paddingVertical: 8 },
     heatmapGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', justifyContent: 'flex-start' },
     heatmapSquare: { width: (SCREEN_WIDTH - 60) / 18, height: (SCREEN_WIDTH - 60) / 18, margin: 1, borderRadius: 2 },
     heatmapSquareSmall: { width: 10, height: 10, margin: 1, borderRadius: 1 },
     heatmapLegend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8 },
-    legendText: { fontSize: 10, color: '#666', marginHorizontal: 4 },
+    legendText: { fontSize: 10, marginHorizontal: 4 },
     masteryLegend: { marginTop: 12, paddingHorizontal: 4 },
     legendRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
     bankSelector: { marginBottom: 8 },

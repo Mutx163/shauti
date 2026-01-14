@@ -5,9 +5,47 @@ export type AutoSkipMode = 'off' | 'correct_only' | '1s' | '2s' | '3s';
 const SETTINGS_KEYS = {
     AUTO_SKIP_MODE: 'auto_skip_mode',
     AUTO_REMOVE_MISTAKE: 'auto_remove_mistake',
+    THEME_MODE: 'theme_mode',
+    SEED_COLOR: 'seed_color',
 };
 
+export type ThemeMode = 'light' | 'dark' | 'eye' | 'system';
+
 export class SettingsManager {
+    static async getSeedColor(): Promise<string> {
+        try {
+            const value = await AsyncStorage.getItem(SETTINGS_KEYS.SEED_COLOR);
+            return value || '#6750A4'; // Default M3 Purple
+        } catch (error) {
+            console.error('Failed to load seed color:', error);
+            return '#6750A4';
+        }
+    }
+
+    static async setSeedColor(color: string): Promise<void> {
+        try {
+            await AsyncStorage.setItem(SETTINGS_KEYS.SEED_COLOR, color);
+        } catch (error) {
+            console.error('Failed to save seed color:', error);
+        }
+    }
+    static async getThemeMode(): Promise<ThemeMode> {
+        try {
+            const value = await AsyncStorage.getItem(SETTINGS_KEYS.THEME_MODE);
+            return (value as ThemeMode) || 'system';
+        } catch (error) {
+            console.error('Failed to load theme mode:', error);
+            return 'system';
+        }
+    }
+
+    static async setThemeMode(mode: ThemeMode): Promise<void> {
+        try {
+            await AsyncStorage.setItem(SETTINGS_KEYS.THEME_MODE, mode);
+        } catch (error) {
+            console.error('Failed to save theme mode:', error);
+        }
+    }
     static async getAutoSkipMode(): Promise<AutoSkipMode> {
         try {
             const value = await AsyncStorage.getItem(SETTINGS_KEYS.AUTO_SKIP_MODE);

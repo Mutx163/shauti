@@ -124,7 +124,11 @@ export default function MockExamScreen() {
         });
     };
 
-    if (loading) return <View style={styles.center}><Text>试卷生成中...</Text></View>;
+    if (loading) return (
+        <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
+            <Text style={{ color: theme.colors.onSurface }}>试卷生成中...</Text>
+        </View>
+    );
 
     const currentQuestion = questions[currentIndex];
     const options = currentQuestion.options ? JSON.parse(currentQuestion.options) : {};
@@ -133,15 +137,15 @@ export default function MockExamScreen() {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
             {/* Header / Timer */}
-            <View style={styles.header}>
+            <View style={[styles.header, { borderBottomWidth: 1, borderBottomColor: theme.colors.outlineVariant }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <IconButton icon="clock-outline" size={20} />
-                    <Text variant="titleMedium" style={{ color: timeLeft < 300 ? theme.colors.error : theme.colors.primary }}>
+                    <IconButton icon="clock-outline" size={20} iconColor={timeLeft < 300 ? theme.colors.error : theme.colors.primary} />
+                    <Text variant="titleMedium" style={{ color: timeLeft < 300 ? theme.colors.error : theme.colors.primary, fontWeight: 'bold' }}>
                         {formatTime(timeLeft)}
                     </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Button mode="text" onPress={() => setShowSheet(true)}>答题卡 ({answers.size}/{questions.length})</Button>
+                    <Button mode="text" onPress={() => setShowSheet(true)} textColor={theme.colors.secondary}>答题卡 ({answers.size}/{questions.length})</Button>
                     <Button mode="contained" compact onPress={() => Alert.alert('交卷', '确认提交试卷？', [{ text: '取消' }, { text: '交卷', onPress: submitExam }])}>交卷</Button>
                 </View>
             </View>
@@ -150,17 +154,17 @@ export default function MockExamScreen() {
 
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={{ marginBottom: 16 }}>
-                    <Text variant="titleMedium" style={{ marginBottom: 8 }}>
+                    <Text variant="titleMedium" style={{ marginBottom: 8, color: theme.colors.onSurface, fontWeight: 'bold' }}>
                         {currentIndex + 1}. {getTypeLabel(currentQuestion.type)}
                     </Text>
-                    <MathText content={currentQuestion.content} fontSize={16} />
+                    <MathText content={currentQuestion.content} fontSize={16} color={theme.colors.onSurface} />
                 </View>
 
                 {renderOptions(currentQuestion, options, currentAnswer, handleAnswer, theme)}
             </ScrollView>
 
             {/* Footer Navigation */}
-            <View style={styles.footer}>
+            <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.outlineVariant }]}>
                 <Button mode="outlined" onPress={() => setCurrentIndex(Math.max(0, currentIndex - 1))} disabled={currentIndex === 0} style={{ flex: 1, marginRight: 8 }}>
                     上一题
                 </Button>
@@ -215,11 +219,11 @@ function renderOptions(question: Question, options: any, selectedAnswer: any, se
         return (
             <RadioButton.Group onValueChange={setSelectedAnswer} value={selectedAnswer}>
                 {entries.map(([key, value]: any) => (
-                    <Card key={key} style={{ marginBottom: 8 }} mode={selectedAnswer === key ? 'contained' : 'outlined'} onPress={() => setSelectedAnswer(key)}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 8 }}>
+                    <Card key={key} style={{ marginBottom: 12, backgroundColor: selectedAnswer === key ? theme.colors.primaryContainer : theme.colors.surface, shadowColor: theme.colors.shadow }} mode={selectedAnswer === key ? 'contained' : 'outlined'} onPress={() => setSelectedAnswer(key)}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12 }}>
                             <RadioButton value={key} />
-                            <View style={{ flex: 1 }}>
-                                <MathText content={isBool ? value : `${key}. ${value}`} fontSize={15} />
+                            <View style={{ flex: 1, marginLeft: 8 }}>
+                                <MathText content={isBool ? value : `${key}. ${value}`} fontSize={15} color={selectedAnswer === key ? theme.colors.onPrimaryContainer : theme.colors.onSurface} />
                             </View>
                         </View>
                     </Card>
@@ -239,11 +243,11 @@ function renderOptions(question: Question, options: any, selectedAnswer: any, se
                 {entries.map(([key, value]: any) => {
                     const isSelected = currentSelected.includes(key);
                     return (
-                        <Card key={key} style={{ marginBottom: 8 }} mode={isSelected ? 'contained' : 'outlined'} onPress={() => toggle(key)}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 8 }}>
+                        <Card key={key} style={{ marginBottom: 12, backgroundColor: isSelected ? theme.colors.primaryContainer : theme.colors.surface, shadowColor: theme.colors.shadow }} mode={isSelected ? 'contained' : 'outlined'} onPress={() => toggle(key)}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12 }}>
                                 <Checkbox status={isSelected ? 'checked' : 'unchecked'} />
-                                <View style={{ flex: 1 }}>
-                                    <MathText content={`${key}. ${value}`} fontSize={15} />
+                                <View style={{ flex: 1, marginLeft: 8 }}>
+                                    <MathText content={`${key}. ${value}`} fontSize={15} color={isSelected ? theme.colors.onPrimaryContainer : theme.colors.onSurface} />
                                 </View>
                             </View>
                         </Card>
@@ -268,8 +272,8 @@ const styles = StyleSheet.create({
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 8, height: 50 },
     content: { padding: 16, flex: 1 },
-    footer: { flexDirection: 'row', padding: 16, borderTopWidth: 1, borderTopColor: '#eee' },
-    sheetOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
+    footer: { flexDirection: 'row', padding: 16, borderTopWidth: 1 },
+    sheetOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 100 },
     sheetContent: { paddingBottom: 20 },
     sheetGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 8 },
     sheetItem: { width: '18%', margin: '1%' },

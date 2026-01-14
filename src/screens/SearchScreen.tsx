@@ -92,17 +92,17 @@ export default function SearchScreen() {
                     ListEmptyComponent={
                         searchQuery.trim() ? (
                             <View style={styles.center}>
-                                <Text style={{ color: 'gray' }}>未找到相关题目</Text>
+                                <Text style={{ color: theme.colors.onSurfaceVariant }}>未找到相关题目</Text>
                             </View>
                         ) : (
                             <View style={styles.center}>
-                                <Text style={{ color: 'gray' }}>输入关键词搜索所有题库</Text>
+                                <Text style={{ color: theme.colors.onSurfaceVariant }}>输入关键词搜索所有题库</Text>
                             </View>
                         )
                     }
                     renderItem={({ item }) => (
                         <Card
-                            style={styles.card}
+                            style={[styles.card, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]}
                             mode="outlined"
                             onPress={() => {
                                 // Navigate to QuizScreen in "single question" mode or similar?
@@ -124,10 +124,17 @@ export default function SearchScreen() {
                         >
                             <Card.Content>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                                    <Chip textStyle={{ fontSize: 10, height: 16, lineHeight: 16 }} style={{ height: 24 }} compact>{getTypeLabel(item.type)}</Chip>
+                                    <Chip 
+                                mode="outlined"
+                                textStyle={{ fontSize: 10, height: 16, lineHeight: 16 }} 
+                                style={{ height: 24, backgroundColor: theme.colors.surface }} 
+                                compact
+                            >
+                                {getTypeLabel(item.type)}
+                            </Chip>
                                     <Text variant="bodySmall" style={{ color: theme.colors.primary }}>{item.bank_name}</Text>
                                 </View>
-                                <MathText content={item.content} numberOfLines={3} fontSize={15} />
+                                <MathText content={item.content} numberOfLines={3} fontSize={15} color={theme.colors.onSurface} />
                             </Card.Content>
                         </Card>
                     )}
@@ -140,7 +147,7 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { padding: 16, paddingBottom: 8 },
-    searchbar: { borderRadius: 12, backgroundColor: 'white' },
+    searchbar: { borderRadius: 12 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 50 },
-    card: { marginBottom: 12, backgroundColor: 'white' },
+    card: { marginBottom: 12 },
 });
