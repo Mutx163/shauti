@@ -34,7 +34,8 @@ jobs:
             
             echo "Installing Android SDK components..."
             mkdir -p ~/.android && touch ~/.android/repositories.cfg
-            yes | sdkmanager "cmake;3.22.1" "ndk;25.1.8937393"
+            # Fix: Handle SIGPIPE (exit 141) from 'yes' when sdkmanager closes stdin
+            (yes || true) | sdkmanager "cmake;3.22.1" "ndk;25.1.8937393"
 
       - run:
           name: Expo Prebuild
