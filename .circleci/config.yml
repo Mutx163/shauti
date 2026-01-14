@@ -1,23 +1,35 @@
 version: 2.1
 
 jobs:
-  build:
+  build-android:
     docker:
-      - image: cimg/node:20.10.0
-    working_directory: ~/repo
+      - image: cimg/android:2024.01.1-node
+    environment:
+      JAVA_OPTS: "-Xmx4g"
+      GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g"
+    resource_class: large
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - v1-dependencies-{{ checksum "package-lock.json" }}
-            - v1-dependencies-
       - run:
           name: Install Dependencies
           command: npm install
-      - save_cache:
-          paths:
-            - node_modules
-          key: v1-dependencies-{{ checksum "package-lock.json" }}
+      
       - run:
-          name: TypeScript Check
-          command: npx tsc --noEmit
+          name: Expo Prebuild
+          command: npx expo prebuild --platform android --no-install
+
+      - run:
+          name: Build Debug APK
+          command: |
+            cd android
+            chmod +x gradlew
+            ./gradlew assembleDebug
+
+      - store_artifacts:
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          destination: app-debug.apk
+
+workflows:
+  build-flow:
+    jobs:
+      - build-android
