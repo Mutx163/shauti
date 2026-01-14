@@ -43,10 +43,11 @@ jobs:
 
       - run:
           name: Build Debug APK
+          no_output_timeout: 30m
           command: |
             cd android
             chmod +x gradlew
-            ./gradlew assembleDebug
+            ./gradlew assembleDebug --console=plain
 
       - store_artifacts:
           path: android/app/build/outputs/apk/debug/app-debug.apk
