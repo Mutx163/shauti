@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { Text, Card, Button, Checkbox, useTheme, Appbar, Slider, Divider } from 'react-native-paper'; // Note: Slider might strictly be from @react-native-community/slider if paper doesn't export it, checking imports. Paper usually wraps native components or provides its own.
+import { Text, Card, Button, Checkbox, useTheme, Appbar, Divider } from 'react-native-paper'; // Note: Slider might strictly be from @react-native-community/slider if paper doesn't export it, checking imports. Paper usually wraps native components or provides its own.
 // Actually react-native-paper doesn't export Slider typically. We might need @react-native-community/slider. 
 // However the user environment might not have it. I'll use a simple TextInput or +/- buttons if Slider is missing, or check package.json.
 // Let's assume we don't have extra libs and use simple inputs or buttons.

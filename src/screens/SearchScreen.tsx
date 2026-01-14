@@ -134,7 +134,7 @@ export default function SearchScreen() {
                             </Chip>
                                     <Text variant="bodySmall" style={{ color: theme.colors.primary }}>{item.bank_name}</Text>
                                 </View>
-                                <MathText content={item.content} numberOfLines={3} fontSize={15} color={theme.colors.onSurface} />
+                                <MathText content={item.content} fontSize={15} color={theme.colors.onSurface} />
                             </Card.Content>
                         </Card>
                     )}

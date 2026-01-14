@@ -20,7 +20,7 @@ export default function HomeScreen() {
 
     useEffect(() => {
         const unsubscribe = SubscriptionService.subscribe(setIsSyncing);
-        return () => unsubscribe();
+        return () => { unsubscribe(); };
     }, []);
 
     // Rename State
