@@ -14,13 +14,13 @@ export default function QuizConfigScreen() {
     const { bankId, bankName: initialBankName } = route.params;
 
     // 状态颜色逻辑
-    const dueColor = theme.colors.primary === '#006D3A' 
+    const dueColor = theme.colors.primary === '#006D3A'
         ? '#FFD54F' // 护眼模式下使用琥珀色表示待复习
         : (theme.dark ? '#FFB74D' : '#F57C00');
-    
+
     // 统一成功颜色逻辑 (护眼模式使用柔和绿色，其他模式使用主题主色)
-    const successColor = theme.colors.primary === '#006D3A' 
-        ? '#4CAF50' 
+    const successColor = theme.colors.primary === '#006D3A'
+        ? '#4CAF50'
         : theme.colors.primary;
 
     const [bankName, setBankName] = useState(initialBankName || '题库');
@@ -137,7 +137,7 @@ export default function QuizConfigScreen() {
     const handleResetProgress = async () => {
         try {
             const db = getDB();
-            
+
             // 1. 将所有已背过的题目的下次复习时间设置为现在（使其进入待复习队列）
             // 这样既保留了记忆等级，又让用户可以立即重新复习所有题目
             await db.runAsync(`
@@ -174,75 +174,75 @@ export default function QuizConfigScreen() {
                     <Text variant="headlineMedium" style={[styles.bankTitle, { color: theme.colors.primary }]}>{bankName}</Text>
 
                     <View style={styles.statsRow}>
-                            <QuickStat
-                                label="总题目"
-                                count={stats.total}
-                                icon="book-multiple"
-                                color={theme.colors.primary}
-                                onPress={() => navigation.navigate('MasteryList', { bankId, bankName })}
-                            />
-                            <QuickStat
-                                label="待复习"
-                                count={stats.due}
-                                icon="calendar-clock"
-                                color={dueColor}
-                                onPress={() => stats.due > 0 && navigation.navigate('Quiz', { mode: 'review', bankId, bankName })}
-                            />
-                            <QuickStat
-                                label="错题本"
-                                count={stats.mistakes}
-                                icon="alert-octagon"
-                                color={theme.colors.error}
-                                onPress={() => stats.mistakes > 0 && navigation.navigate('Quiz', { mode: 'mistake', bankId, bankName })}
-                            />
+                        <QuickStat
+                            label="总题目"
+                            count={stats.total}
+                            icon="book-multiple"
+                            color={theme.colors.primary}
+                            onPress={() => navigation.navigate('MasteryList', { bankId, bankName })}
+                        />
+                        <QuickStat
+                            label="待复习"
+                            count={stats.due}
+                            icon="calendar-clock"
+                            color={dueColor}
+                            onPress={() => stats.due > 0 && navigation.navigate('Quiz', { mode: 'review', bankId, bankName })}
+                        />
+                        <QuickStat
+                            label="错题本"
+                            count={stats.mistakes}
+                            icon="alert-octagon"
+                            color={theme.colors.error}
+                            onPress={() => stats.mistakes > 0 && navigation.navigate('Quiz', { mode: 'mistake', bankId, bankName })}
+                        />
                     </View>
                 </View>
 
-                    {/* Mock Exam Entry */}
-                    <Button
-                        mode="outlined"
-                        onPress={handleStartExam}
-                        style={[styles.inlineExamButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}
-                        contentStyle={{ height: 48 }}
-                        icon="timer-outline"
-                        textColor={theme.colors.onSurfaceVariant}
-                    >
-                        开启模拟考试
-                    </Button>
+                {/* Mock Exam Entry */}
+                <Button
+                    mode="outlined"
+                    onPress={handleStartExam}
+                    style={[styles.inlineExamButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}
+                    contentStyle={{ height: 48 }}
+                    icon="timer-outline"
+                    textColor={theme.colors.onSurfaceVariant}
+                >
+                    开启模拟考试
+                </Button>
 
-                    {/* Question Type */}
-                    <Card style={[styles.card, { shadowColor: theme.colors.shadow }]} mode="outlined">
-                        <Card.Content>
-                            <Text variant="titleMedium" style={{ marginBottom: 12, fontWeight: 'bold' }}>题型过滤</Text>
-                            <View style={styles.typeGrid}>
-                                {questionTypes.map((type) => (
-                                    <TouchableOpacity
-                                        key={type.value}
-                                        style={[
-                                            styles.typeButton,
-                                            { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant },
-                                            selectedType === type.value && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                                        ]}
-                                        onPress={() => setSelectedType(type.value)}
+                {/* Question Type */}
+                <Card style={[styles.card, { shadowColor: theme.colors.shadow }]} mode="outlined">
+                    <Card.Content>
+                        <Text variant="titleMedium" style={{ marginBottom: 12, fontWeight: 'bold' }}>题型过滤</Text>
+                        <View style={styles.typeGrid}>
+                            {questionTypes.map((type) => (
+                                <TouchableOpacity
+                                    key={type.value}
+                                    style={[
+                                        styles.typeButton,
+                                        { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant },
+                                        selectedType === type.value && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                                    ]}
+                                    onPress={() => setSelectedType(type.value)}
+                                >
+                                    <IconButton
+                                        icon={type.icon}
+                                        size={20}
+                                        iconColor={selectedType === type.value ? theme.colors.onPrimary : theme.colors.onSurfaceVariant}
+                                    />
+                                    <Text
+                                        variant="labelMedium"
+                                        style={{ color: selectedType === type.value ? theme.colors.onPrimary : theme.colors.onSurfaceVariant }}
                                     >
-                                        <IconButton 
-                                            icon={type.icon} 
-                                            size={20} 
-                                            iconColor={selectedType === type.value ? theme.colors.onPrimary : theme.colors.onSurfaceVariant} 
-                                        />
-                                        <Text 
-                                            variant="labelMedium" 
-                                            style={{ color: selectedType === type.value ? theme.colors.onPrimary : theme.colors.onSurfaceVariant }}
-                                        >
-                                            {type.label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </Card.Content>
-                    </Card>
+                                        {type.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </Card.Content>
+                </Card>
 
-                    <View style={{ height: 20 }} />
+                <View style={{ height: 20 }} />
             </ScrollView>
 
             <Portal>
@@ -289,10 +289,10 @@ export default function QuizConfigScreen() {
                     </Text>
                     <View style={styles.modalButtons}>
                         <Button onPress={() => setResetModalVisible(false)} style={{ flex: 1 }}>取消</Button>
-                        <Button 
-                            mode="contained" 
-                            onPress={handleResetProgress} 
-                            style={{ flex: 1, marginLeft: 8 }} 
+                        <Button
+                            mode="contained"
+                            onPress={handleResetProgress}
+                            style={{ flex: 1, marginLeft: 8 }}
                         >
                             确认开始
                         </Button>
@@ -302,8 +302,8 @@ export default function QuizConfigScreen() {
 
             {/* Fixed Footer Buttons */}
             <View style={[
-                styles.footer, 
-                { 
+                styles.footer,
+                {
                     paddingBottom: Math.max(insets.bottom, 16),
                     backgroundColor: theme.colors.surface,
                     borderTopColor: theme.colors.outlineVariant,
@@ -314,7 +314,7 @@ export default function QuizConfigScreen() {
                     <Button
                         mode="outlined"
                         onPress={() => handleStart('study')}
-                        style={[styles.footerButton, { borderColor: theme.colors.primary }]}
+                        style={[styles.footerButton, { borderColor: theme.colors.primary, borderWidth: 1 }]}
                         contentStyle={{ height: 48 }}
                         labelStyle={{ fontSize: 14, fontWeight: 'bold' }}
                     >
@@ -341,36 +341,46 @@ const styles = StyleSheet.create({
     header: { marginBottom: 24 },
     bankTitle: { fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
     statsRow: { flexDirection: 'row', gap: 8 },
-    statItem: { borderRadius: 12 },
-    statContent: { alignItems: 'center', paddingVertical: 12 },
+    statItem: {
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E5E5EA',
+        backgroundColor: '#FFFFFF',
+    },
+    statContent: { alignItems: 'center', paddingVertical: 14 },
     sectionTitle: { fontWeight: 'bold', marginBottom: 12, marginLeft: 4 },
     modeRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
     modeCard: {
         flex: 1,
         padding: 16,
         borderRadius: 16,
-        borderWidth: 2,
-        borderColor: 'transparent',
+        borderWidth: 1,
+        borderColor: '#E5E5EA',
         alignItems: 'center'
     },
-    card: { marginBottom: 20, borderRadius: 16 },
+    card: {
+        marginBottom: 20,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E5E5EA',
+        backgroundColor: '#FFFFFF',
+    },
     typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     typeButton: {
         width: '31.5%',
-        paddingVertical: 8,
+        paddingVertical: 10,
         alignItems: 'center',
-        borderRadius: 12,
+        borderRadius: 16,
         borderWidth: 1,
+        backgroundColor: '#FAFAFA',
     },
     integratedTitle: { fontWeight: 'bold', marginBottom: 16, textAlign: 'left', opacity: 0.8 },
     footer: {
         padding: 16,
-        gap: 8,
+        paddingTop: 12,
         borderTopWidth: 1,
-        elevation: 10,
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        borderTopColor: '#E5E5EA',
+        backgroundColor: '#FFFFFF',
     },
     footerRow: { flexDirection: 'row', gap: 8 },
     footerButton: { flex: 1, borderRadius: 12 },

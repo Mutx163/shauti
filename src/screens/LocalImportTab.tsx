@@ -8,6 +8,83 @@ import Papa from 'papaparse';
 import { getDB } from '../db/database';
 import { useNavigation } from '@react-navigation/native';
 
+
+/**
+ * 导入解析引擎 - 遵循 Evan Bacon Skill 规范中的职责分离原则
+ */
+const ImportParser = {
+    normalizeCell: (val: any) => (val === null || val === undefined) ? '' : val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim(),
+
+    normalizeToken: (val: any) => ImportParser.normalizeCell(val).toUpperCase(),
+
+    normalizeTF: (val: any) => {
+        const s = ImportParser.normalizeToken(val);
+        const parts = s.split(/[\s,，;；|]+/).map(p => p.trim()).filter(Boolean);
+        for (const p of parts.length ? parts : [s]) {
+            if (['TRUE', 'T', '1', '正确', '对'].includes(p)) return 'T';
+            if (['FALSE', 'F', '0', '错误', '错'].includes(p)) return 'F';
+        }
+        return '';
+    },
+
+    uniqueLetters: (s: string) => {
+        const out: string[] = [];
+        for (const ch of s) if (!out.includes(ch)) out.push(ch);
+        return out.join('');
+    },
+
+    isSingleChoice: (s: string) => /^[ABCD]$/.test(s),
+    isMultiChoice: (s: string) => /^[ABCD]{2,4}$/.test(s) && ImportParser.uniqueLetters(s).length === s.length,
+
+    pickAnswer: (type: string, candidates: any[]) => {
+        const cleaned = candidates.map(c => ImportParser.normalizeCell(c)).filter(Boolean);
+        const tokens = cleaned.map(c => ImportParser.normalizeToken(c).split(/[,\s，;；|]+/)[0] || '');
+
+        if (type === 'true_false') {
+            for (const c of cleaned) {
+                const tf = ImportParser.normalizeTF(c);
+                if (tf) return tf;
+            }
+            return '';
+        }
+
+        if (type === 'single') {
+            for (const t of tokens) {
+                const res = t.replace(/[^ABCD]/g, '');
+                if (ImportParser.isSingleChoice(res)) return res;
+            }
+            return '';
+        }
+
+        if (type === 'multi') {
+            for (const t of tokens) {
+                const res = ImportParser.uniqueLetters(t.replace(/[^ABCD]/g, ''));
+                if (ImportParser.isMultiChoice(res)) return res;
+            }
+            return '';
+        }
+        return cleaned[0] || '';
+    },
+
+    findRowValue: (row: any, keys: string[]) => {
+        const foundKey = Object.keys(row).find(k => keys.includes(k.replace(/^\uFEFF/, '').trim()));
+        return foundKey ? row[foundKey] : undefined;
+    },
+
+    parseOptions: (row: any) => {
+        const clean = (text: string, label: string) => {
+            if (!text) return '';
+            return text.toString().replace(new RegExp(`^${label}[\\s\\.、．]*`, 'i'), '').trim();
+        };
+        return {
+            A: clean(ImportParser.findRowValue(row, ['A', 'OptionA']) || '', 'A'),
+            B: clean(ImportParser.findRowValue(row, ['B', 'OptionB']) || '', 'B'),
+            C: clean(ImportParser.findRowValue(row, ['C', 'OptionC']) || '', 'C'),
+            D: clean(ImportParser.findRowValue(row, ['D', 'OptionD']) || '', 'D'),
+        };
+    }
+};
+
 export default function LocalImportTab() {
     const navigation = useNavigation<any>();
     const theme = useTheme();
@@ -76,6 +153,13 @@ export default function LocalImportTab() {
 
     const saveToDatabase = async (data: any[], fileName: string) => {
         const db = getDB();
+        const typeMapping: any = {
+            'single': 'single', '单选': 'single', '单选题': 'single',
+            'multi': 'multi', '多选': 'multi', '多选题': 'multi',
+            'true_false': 'true_false', '判断': 'true_false', '判断题': 'true_false',
+            'fill': 'fill', '填空': 'fill', '填空题': 'fill',
+            'short': 'short', '简答': 'short', '简答题': 'short'
+        };
 
         try {
             const normalizedBankName = fileName.replace('.csv', '').replace('.txt', '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
@@ -89,159 +173,45 @@ export default function LocalImportTab() {
             let bankId: number;
             if (existing?.id) {
                 bankId = existing.id;
-                await db.runAsync(
-                    'UPDATE question_banks SET description = ? WHERE id = ?',
-                    importDesc,
-                    bankId
-                );
+                await db.runAsync('UPDATE question_banks SET description = ? WHERE id = ?', importDesc, bankId);
                 await db.runAsync('DELETE FROM questions WHERE bank_id = ?', bankId);
                 await db.runAsync('DELETE FROM quiz_sessions WHERE bank_id = ?', bankId);
             } else {
-                const bankResult: any = await db.runAsync(
-                    'INSERT INTO question_banks (name, description) VALUES (?, ?)',
-                    normalizedBankName,
-                    importDesc
-                );
+                const bankResult: any = await db.runAsync('INSERT INTO question_banks (name, description) VALUES (?, ?)', normalizedBankName, importDesc);
                 bankId = bankResult.lastInsertRowId;
             }
 
-            const total = data.length;
-            const normalizeCell = (val: any) => {
-                if (val === null || val === undefined) return '';
-                return val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-            };
-            const normalizeToken = (val: any) => normalizeCell(val).toUpperCase();
-            const normalizeTF = (val: any) => {
-                const s = normalizeToken(val);
-                const parts = s.split(/[\s,，;；|]+/).map(p => p.trim()).filter(Boolean);
-                for (const p of parts.length ? parts : [s]) {
-                    if (p === 'TRUE' || p === 'T' || p === '1' || p === '正确' || p === '对') return 'T';
-                    if (p === 'FALSE' || p === 'F' || p === '0' || p === '错误' || p === '错') return 'F';
-                }
-                return '';
-            };
-            const uniqueLetters = (s: string) => {
-                const out: string[] = [];
-                for (const ch of s) {
-                    if (!out.includes(ch)) out.push(ch);
-                }
-                return out.join('');
-            };
-            const isSingleChoice = (s: string) => /^[ABCD]$/.test(s);
-            const isMultiChoice = (s: string) => /^[ABCD]{2,4}$/.test(s) && uniqueLetters(s).length === s.length;
-            const pickAnswerFromCandidates = (questionType: string, candidates: string[]) => {
-                const cleaned = candidates.map(c => normalizeCell(c)).filter(Boolean);
-
-                if (questionType === 'true_false') {
-                    for (const c of cleaned) {
-                        const tf = normalizeTF(c);
-                        if (tf) return tf;
-                    }
-                    return '';
-                }
-
-                if (questionType === 'single') {
-                    for (const c of cleaned) {
-                        const first = normalizeToken(c).split(/[,\s，;；|]+/)[0] || '';
-                        const t = first.replace(/[^ABCD]/g, '');
-                        if (isSingleChoice(t)) return t;
-                    }
-                    return '';
-                }
-
-                if (questionType === 'multi') {
-                    for (const c of cleaned) {
-                        const first = normalizeToken(c).split(/[,\s，;；|]+/)[0] || '';
-                        const t = uniqueLetters(first.replace(/[^ABCD]/g, ''));
-                        if (isMultiChoice(t)) return t;
-                    }
-                    return '';
-                }
-
-                return cleaned[0] || '';
-            };
-
-            for (let i = 0; i < total; i++) {
+            for (let i = 0; i < data.length; i++) {
                 const row = data[i];
-                const findValue = (keys: string[]) => {
-                    const foundKey = Object.keys(row).find(k => keys.includes(k.replace(/^\uFEFF/, '').trim()));
-                    return foundKey ? row[foundKey] : undefined;
-                };
-
-                const cleanOption = (text: string, label: string) => {
-                    if (!text) return '';
-                    const regex = new RegExp(`^${label}[\\s\\.、．]*`, 'i');
-                    return text.toString().replace(regex, '').trim();
-                };
-
-                const options = {
-                    A: cleanOption(findValue(['A', 'OptionA']) || '', 'A'),
-                    B: cleanOption(findValue(['B', 'OptionB']) || '', 'B'),
-                    C: cleanOption(findValue(['C', 'OptionC']) || '', 'C'),
-                    D: cleanOption(findValue(['D', 'OptionD']) || '', 'D'),
-                };
-
-                const typeMapping: any = {
-                    'single': 'single', '单选': 'single', '单选题': 'single',
-                    'multi': 'multi', '多选': 'multi', '多选题': 'multi',
-                    'true_false': 'true_false', '判断': 'true_false', '判断题': 'true_false',
-                    'fill': 'fill', '填空': 'fill', '填空题': 'fill',
-                    'short': 'short', '简答': 'short', '简答题': 'short'
-                };
-
-                const rawType = normalizeCell(findValue(['type', '类型'])) || 'single';
+                const options = ImportParser.parseOptions(row);
+                const rawType = ImportParser.normalizeCell(ImportParser.findRowValue(row, ['type', '类型'])) || 'single';
                 const type = typeMapping[rawType] || typeMapping[rawType.toLowerCase()] || 'single';
-                const content = findValue(['content', 'question', '题目']) || '题目内容丢失';
-                const rawAnswer = normalizeCell(findValue(['answer', 'correct_answer', '答案']));
-                const rawExplanation = normalizeCell(findValue(['explanation', 'analysis', '解析']));
-                const extra = Array.isArray((row as any).__parsed_extra)
-                    ? (row as any).__parsed_extra.map((v: any) => normalizeCell(v)).filter(Boolean).join(',')
-                    : '';
+                const content = ImportParser.findRowValue(row, ['content', 'question', '题目']) || '题目内容丢失';
+                const rawAnswer = ImportParser.normalizeCell(ImportParser.findRowValue(row, ['answer', 'correct_answer', '答案']));
+                const rawExplanation = ImportParser.normalizeCell(ImportParser.findRowValue(row, ['explanation', 'analysis', '解析']));
+                const extra = Array.isArray((row as any).__parsed_extra) ? (row as any).__parsed_extra.map((v: any) => ImportParser.normalizeCell(v)).filter(Boolean).join(',') : '';
 
-                const answer = pickAnswerFromCandidates(type, [
-                    rawAnswer,
-                    rawExplanation,
-                    normalizeCell(options.A),
-                    normalizeCell(options.B),
-                    normalizeCell(options.C),
-                    normalizeCell(options.D),
-                    extra
-                ]);
-
+                const answer = ImportParser.pickAnswer(type, [rawAnswer, rawExplanation, options.A, options.B, options.C, options.D, extra]);
                 let explanation = rawExplanation;
-                const answerLooksInvalidForType = (() => {
-                    if (type === 'true_false') return !normalizeTF(answer);
-                    if (type === 'single') return !isSingleChoice(normalizeToken(answer).replace(/[^ABCD]/g, ''));
-                    if (type === 'multi') return !isMultiChoice(uniqueLetters(normalizeToken(answer).replace(/[^ABCD]/g, '')));
+
+                const answerInvalid = (() => {
+                    const tok = ImportParser.normalizeToken(answer).replace(/[^ABCD]/g, '');
+                    if (type === 'true_false') return !ImportParser.normalizeTF(answer);
+                    if (type === 'single') return !ImportParser.isSingleChoice(tok);
+                    if (type === 'multi') return !ImportParser.isMultiChoice(ImportParser.uniqueLetters(tok));
                     return false;
                 })();
 
-                if (!explanation || normalizeTF(explanation) || isSingleChoice(normalizeToken(explanation).replace(/[^ABCD]/g, ''))) {
-                    if (rawAnswer && rawAnswer !== answer && rawAnswer.length > 2) {
-                        explanation = rawAnswer;
-                    }
+                if (answerInvalid || !explanation || ImportParser.normalizeTF(explanation) || ImportParser.isSingleChoice(ImportParser.normalizeToken(explanation).replace(/[^ABCD]/g, ''))) {
+                    if (rawAnswer && rawAnswer !== answer && rawAnswer.length > 2) explanation = rawAnswer;
                 }
-
-                if (answerLooksInvalidForType && rawAnswer && rawAnswer.length > 2 && !normalizeTF(rawAnswer)) {
-                    explanation = explanation || rawAnswer;
-                }
-
-                if (extra) {
-                    explanation = explanation ? `${explanation}\n${extra}` : extra;
-                }
+                if (extra) explanation = explanation ? `${explanation}\n${extra}` : extra;
 
                 await db.runAsync(
-                    `INSERT INTO questions (bank_id, type, content, options, correct_answer, explanation) 
-           VALUES (?, ?, ?, ?, ?, ?)`,
-                    bankId,
-                    type,
-                    content,
-                    JSON.stringify(options),
-                    answer,
-                    explanation
+                    `INSERT INTO questions (bank_id, type, content, options, correct_answer, explanation) VALUES (?, ?, ?, ?, ?, ?)`,
+                    bankId, type, content, JSON.stringify(options), answer, explanation || ''
                 );
-
-                setProgress((i + 1) / total);
+                setProgress((i + 1) / data.length);
             }
         } catch (err) {
             console.error(err);

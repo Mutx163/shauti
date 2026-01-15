@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useLayoutEffect, useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions, KeyboardAvoidingView, Platform, Keyboard, TouchableOpacity, FlatList, LayoutAnimation, Alert, Animated, PanResponder } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, Button, Card, RadioButton, Checkbox, TextInput, ProgressBar, useTheme, Divider, IconButton, Portal, Modal } from 'react-native-paper';
@@ -284,7 +284,7 @@ export default function QuizScreen() {
 
     if (loading) return <View style={styles.center}><ActivityIndicator size="large" /><Text style={{ marginTop: 10 }}>加载中...</Text></View>;
     if (questions.length === 0) return <View style={styles.center}><Text>没有题目</Text></View>;
-    
+
     // 移除原有全屏完成界面，保持在原题目界面
     // if (completed) { ... }
 
@@ -380,10 +380,10 @@ export default function QuizScreen() {
             {showToast && (
                 <Portal>
                     <View style={styles.toastContainer} pointerEvents="none">
-                        <Animated.View 
+                        <Animated.View
                             style={[
-                                styles.toastBody, 
-                                { 
+                                styles.toastBody,
+                                {
                                     opacity: toastOpacity,
                                     backgroundColor: 'rgba(0, 0, 0, 0.75)', // 暗色背景
                                 }
@@ -431,26 +431,28 @@ const QuestionItem = React.memo(({
                         styles.flashcard,
                         {
                             backgroundColor: theme.colors.surface,
-                            borderColor: theme.colors.outlineVariant,
-                            shadowColor: theme.colors.shadow,
+                            borderColor: '#E5E5EA',
+                            borderWidth: 1,
                         }
                     ]}
                 >
                     {!isFlipped ? (
                         <View style={styles.flashcardPart}>
-                            <View style={[styles.typeBadge, { backgroundColor: getTypeColor(item.type, theme), marginBottom: 12 }]}>
-                                <Text style={styles.typeBadgeText}>{getTypeLabel(item.type)}</Text>
+                            <View style={[styles.typeBadge, { backgroundColor: getTypeColor(item.type, theme) }]}>
+                                <Text style={[styles.typeBadgeText, { color: getTypeTextSubColor(item.type) }]}>{getTypeLabel(item.type)}</Text>
                             </View>
-                            <MathText content={item.content} fontSize={22} baseStyle={{ alignSelf: 'center' }} />
-                            <Text style={styles.tapTip}>点击翻转查看答案</Text>
+                            <View style={{ flex: 1, justifyContent: 'center' }}>
+                                <MathText content={item.content} fontSize={24} baseStyle={{ alignSelf: 'center' }} />
+                            </View>
+                            <Text style={styles.tapTip}>点击翻转</Text>
                         </View>
                     ) : (
-                        <ScrollView style={styles.flashcardPart}>
-                            <Text variant="labelLarge" style={{ color: theme.colors.primary, marginBottom: 8 }}>答案：</Text>
-                            <MathText content={item.correct_answer} fontSize={18} color={theme.colors.onSurface} />
-                            <Divider style={{ marginVertical: 16 }} />
-                            <Text variant="labelLarge" style={{ color: theme.colors.secondary, marginBottom: 8 }}>解析：</Text>
-                            <MathText content={item.explanation || '暂无解析'} fontSize={16} color={theme.colors.onSurfaceVariant} />
+                        <ScrollView style={styles.flashcardPart} showsVerticalScrollIndicator={false}>
+                            <Text variant="labelLarge" style={{ color: theme.colors.primary, marginBottom: 12, fontWeight: 'bold' }}>正确答案</Text>
+                            <MathText content={item.correct_answer} fontSize={20} color={theme.colors.onSurface} />
+                            <Divider style={{ marginVertical: 24, height: 1.5, opacity: 0.5 }} />
+                            <Text variant="labelLarge" style={{ color: theme.colors.secondary, marginBottom: 12, fontWeight: 'bold' }}>题目解析</Text>
+                            <MathText content={item.explanation || '暂无解析'} fontSize={17} color={theme.colors.onSurfaceVariant} />
                         </ScrollView>
                     )}
                 </TouchableOpacity>
@@ -460,14 +462,18 @@ const QuestionItem = React.memo(({
 
     return (
         <View style={styles.scrollItem}>
-            <Card style={[styles.card, { backgroundColor: theme.colors.surface }, viewMode === 'scroll' && { marginBottom: 16 }]} mode={viewMode === 'scroll' ? 'elevated' : 'contained'}>
-                <Card.Content>
+            <Card style={[styles.card, viewMode === 'scroll' && { marginHorizontal: 4 }]} mode="elevated">
+                <Card.Content style={{ paddingVertical: 20 }}>
                     <View style={styles.questionTextContainer}>
-                        {viewMode === 'scroll' && <Text variant="labelLarge" style={{ marginRight: 8, color: theme.colors.primary }}>#{index + 1}</Text>}
-                        <View style={[styles.typeBadge, { backgroundColor: getTypeColor(item.type, theme) }]}>
-                            <Text style={styles.typeBadgeText}>{getTypeLabel(item.type)}</Text>
+                        <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={[styles.typeBadge, { backgroundColor: getTypeColor(item.type, theme) }]}>
+                                    <Text style={[styles.typeBadgeText, { color: getTypeTextSubColor(item.type) }]}>{getTypeLabel(item.type)}</Text>
+                                </View>
+                                {viewMode === 'scroll' && <Text variant="labelMedium" style={{ color: theme.colors.outline, marginBottom: 10 }}>NO.{index + 1}</Text>}
+                            </View>
+                            <MathText content={item.content} fontSize={19} baseStyle={{ lineHeight: 28 }} />
                         </View>
-                        <MathText content={item.content} fontSize={18} baseStyle={{ flex: 1 }} />
                     </View>
                 </Card.Content>
             </Card>
@@ -497,7 +503,7 @@ const QuestionItem = React.memo(({
                         return !itemSelectedAnswer;
                     })()}
                     onPress={() => onSubmitAnswer(index, itemSelectedAnswer)}
-                    style={{ marginHorizontal: 16, marginBottom: 8 }}
+                    style={{ marginHorizontal: 16, marginBottom: 8, borderRadius: 14 }}
                 >
                     提交答案
                 </Button>
@@ -514,20 +520,86 @@ const QuestionItem = React.memo(({
                     questionType={item.type}
                 />
             )}
-            {viewMode === 'scroll' && <Divider style={{ marginVertical: 16 }} />}
+            {viewMode === 'scroll' && <Divider style={{ marginVertical: 16, opacity: 0.3 }} />}
         </View>
     );
 });
 
+
+/**
+ * 高质量选项行组件 - 遵循 Evan Bacon Skill 规范中的 View 设计理念
+ */
+const OptionRow = memo(({
+    label,
+    value,
+    isSelected,
+    isCorrect,
+    isRevealed,
+    onPress,
+    theme,
+    type
+}: any) => {
+    const highlight = isSelected || (isRevealed && isCorrect);
+
+    return (
+        <TouchableOpacity
+            onPress={onPress}
+            activeOpacity={0.85}
+            style={[
+                styles.optionRow,
+                {
+                    backgroundColor: highlight
+                        ? (isRevealed ? (isCorrect ? '#F0FDF4' : '#FEF2F2') : '#F5F5F7')
+                        : '#FFFFFF',
+                    borderColor: highlight
+                        ? (isRevealed ? (isCorrect ? '#22C55E' : '#EF4444') : theme.colors.primary)
+                        : '#E5E5EA',
+                    borderWidth: highlight ? 2 : 1.5,
+                    // 精致阴影
+                    shadowColor: highlight ? (isRevealed ? (isCorrect ? '#22C55E' : '#EF4444') : theme.colors.primary) : '#000',
+                    shadowOffset: { width: 0, height: highlight ? 4 : 0 },
+                    shadowOpacity: highlight ? 0.15 : 0,
+                    shadowRadius: 8,
+                    elevation: highlight ? 3 : 0,
+                }
+            ]}
+        >
+            <View pointerEvents="none" style={{ opacity: isRevealed && !isCorrect && !isSelected ? 0.3 : 1 }}>
+                {type === 'multi' ? (
+                    <Checkbox
+                        status={highlight ? 'checked' : 'unchecked'}
+                        color={isRevealed && isCorrect ? '#22C55E' : (highlight && isRevealed ? '#EF4444' : theme.colors.primary)}
+                    />
+                ) : (
+                    <RadioButton
+                        value={label}
+                        status={highlight ? 'checked' : 'unchecked'}
+                        color={isRevealed && isCorrect ? '#22C55E' : (highlight && isRevealed ? '#EF4444' : theme.colors.primary)}
+                    />
+                )}
+            </View>
+            <View style={styles.optionContent}>
+                <MathText
+                    content={label ? `${label}. ${value}` : value}
+                    fontSize={17}
+                    color={highlight
+                        ? (isRevealed ? (isCorrect ? '#166534' : '#991B1B') : theme.colors.onSurface)
+                        : theme.colors.onSurface}
+                />
+            </View>
+        </TouchableOpacity>
+    );
+});
+
 function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer, showResult, theme, quizMode }: any) {
-    const disabled = showResult;
-    const successColor = theme.colors.primary === '#006D3A' ? '#4CAF50' : theme.colors.primary;
+    const disabled = showResult || quizMode === 'study';
+    const isRevealed = showResult || quizMode === 'study';
 
     const normalizeTF = (val: any) => {
-        if (val === null || val === undefined) return '';
+        if (!val) return '';
         const s = val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toUpperCase();
-        if (s === 'TRUE' || s === 'T' || s === '1' || s === '正确' || s === '对' || val === true) return 'T';
-        if (s === 'FALSE' || s === 'F' || s === '0' || s === '错误' || s === '错' || val === false) return 'F';
+        if (['TRUE', 'T', '1', '正确', '对'].includes(s) || val === true) return 'T';
+        if (['FALSE', 'F', '0', '错误', '错'].includes(s) || val === false) return 'F';
         return s;
     };
 
@@ -539,148 +611,86 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
         if (entries.length === 0) return <ErrorBox theme={theme} />;
 
         return (
-            <View>
-                {entries.map(([key, value]: any) => {
-                    const isSelected = selectedAnswer === key;
-                    const isCorrect = isBool 
-                        ? normalizeTF(question.correct_answer) === key 
-                        : question.correct_answer === key;
-                    const isRevealed = showResult || quizMode === 'study';
-                    const highlight = isSelected || (quizMode === 'study' && isCorrect);
-
-                    return (
-                        <TouchableOpacity
-                            key={key}
-                            onPress={() => !disabled && quizMode !== 'study' && setSelectedAnswer(key)}
-                            activeOpacity={0.7}
-                            style={[
-                                styles.optionRow,
-                                {
-                                    backgroundColor: highlight
-                                        ? (isRevealed ? (isCorrect ? theme.colors.primaryContainer : theme.colors.errorContainer) : theme.colors.secondaryContainer)
-                                        : theme.colors.surface,
-                                    borderColor: highlight
-                                        ? (isRevealed ? (isCorrect ? successColor : theme.colors.error) : theme.colors.primary)
-                                        : theme.colors.outlineVariant,
-                                    borderWidth: highlight ? 2 : 1,
-                                }
-                            ]}
-                        >
-                            <View pointerEvents="none">
-                                <RadioButton
-                                    value={key}
-                                    status={highlight ? 'checked' : 'unchecked'}
-                                    color={isRevealed && isCorrect ? successColor : (highlight && isRevealed ? theme.colors.error : undefined)}
-                                />
-                            </View>
-                            <View style={styles.optionContent}>
-                                <MathText
-                                    content={isBool ? value : `${key}. ${value}`}
-                                    fontSize={16}
-                                    color={highlight
-                                        ? (isRevealed ? (isCorrect ? theme.colors.onPrimaryContainer : theme.colors.onErrorContainer) : theme.colors.onSecondaryContainer)
-                                        : theme.colors.onSurface}
-                                />
-                            </View>
-                        </TouchableOpacity>
-                    );
-                })}
+            <View style={{ paddingHorizontal: 4 }}>
+                {entries.map(([key, value]: any) => (
+                    <OptionRow
+                        key={key}
+                        label={isBool ? '' : key}
+                        value={value}
+                        isSelected={selectedAnswer === key}
+                        isCorrect={isBool ? normalizeTF(question.correct_answer) === key : question.correct_answer === key}
+                        isRevealed={isRevealed}
+                        theme={theme}
+                        type="single"
+                        onPress={() => !disabled && setSelectedAnswer(key)}
+                    />
+                ))}
             </View>
         );
     }
 
     if (question.type === 'multi') {
         const currentSelected = (selectedAnswer as string[]) || [];
-        const correctAnswers = question.correct_answer.split('');
-
-        const toggle = (key: string) => {
-            if (currentSelected.includes(key)) {
-                setSelectedAnswer(currentSelected.filter(k => k !== key));
-            } else {
-                setSelectedAnswer([...currentSelected, key].sort());
-            }
-        };
-
+        const correctAnswers = (question.correct_answer || '').split('');
         const entries = Object.entries(options).filter(([_, v]) => !!v);
 
         if (entries.length === 0) return <ErrorBox theme={theme} />;
 
-        return (
-            <View>
-                {entries.map(([key, value]: any) => {
-                    const isSelected = currentSelected.includes(key);
-                    const isCorrect = correctAnswers.includes(key);
-                    const isRevealed = showResult || quizMode === 'study';
-                    const highlight = isSelected || (quizMode === 'study' && isCorrect);
+        const toggle = (key: string) => {
+            const next = currentSelected.includes(key)
+                ? currentSelected.filter(k => k !== key)
+                : [...currentSelected, key].sort();
+            setSelectedAnswer(next);
+        };
 
-                    return (
-                        <TouchableOpacity
-                            key={key}
-                            onPress={() => !disabled && quizMode !== 'study' && toggle(key)}
-                            activeOpacity={0.7}
-                            style={[
-                                styles.optionRow,
-                                {
-                                    backgroundColor: highlight
-                                        ? (isRevealed ? (isCorrect ? theme.colors.primaryContainer : theme.colors.errorContainer) : theme.colors.secondaryContainer)
-                                        : theme.colors.surface,
-                                    borderColor: highlight
-                                        ? (isRevealed ? (isCorrect ? successColor : theme.colors.error) : theme.colors.primary)
-                                        : theme.colors.outlineVariant,
-                                    borderWidth: highlight ? 2 : 1,
-                                }
-                            ]}
-                        >
-                            <View pointerEvents="none">
-                                <Checkbox
-                                    status={highlight ? 'checked' : 'unchecked'}
-                                    color={isRevealed && isCorrect ? successColor : (highlight && isRevealed ? theme.colors.error : undefined)}
-                                />
-                            </View>
-                            <View style={styles.optionContent}>
-                                <MathText
-                                    content={`${key}. ${value}`}
-                                    fontSize={16}
-                                    color={highlight
-                                        ? (isRevealed ? (isCorrect ? theme.colors.onPrimaryContainer : theme.colors.onErrorContainer) : theme.colors.onSecondaryContainer)
-                                        : theme.colors.onSurface}
-                                />
-                            </View>
-                        </TouchableOpacity>
-                    );
-                })}
+        return (
+            <View style={{ paddingHorizontal: 4 }}>
+                {entries.map(([key, value]: any) => (
+                    <OptionRow
+                        key={key}
+                        label={key}
+                        value={value}
+                        isSelected={currentSelected.includes(key)}
+                        isCorrect={correctAnswers.includes(key)}
+                        isRevealed={isRevealed}
+                        theme={theme}
+                        type="multi"
+                        onPress={() => !disabled && toggle(key)}
+                    />
+                ))}
             </View>
         );
     }
 
     if (question.type === 'fill' || question.type === 'short') {
+        const selectedAnswerValue = (selectedAnswer as string) || '';
         // 背题模式直接显示答案
         if (quizMode === 'study') {
             return (
-            <View style={{
-                marginTop: 8,
-                padding: 16,
-                backgroundColor: theme.colors.surfaceVariant,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: theme.colors.outlineVariant,
-                shadowColor: theme.colors.shadow,
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.1,
-                shadowRadius: 2,
-                elevation: 1
-            }}>
-                <Text variant="bodySmall" style={{ marginBottom: 4, color: theme.colors.onSurfaceVariant, opacity: 0.7, fontWeight: 'bold' }}>答案：</Text>
-                <MathText content={question.correct_answer} fontSize={16} color={theme.colors.onSurface} />
-            </View>
-        );
+                <View style={{
+                    marginTop: 8,
+                    padding: 16,
+                    backgroundColor: theme.colors.surfaceVariant,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: theme.colors.outlineVariant,
+                    shadowColor: theme.colors.shadow,
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 2,
+                    elevation: 1
+                }}>
+                    <Text variant="bodySmall" style={{ marginBottom: 4, color: theme.colors.onSurfaceVariant, opacity: 0.7, fontWeight: 'bold' }}>答案：</Text>
+                    <MathText content={question.correct_answer} fontSize={16} color={theme.colors.onSurface} />
+                </View>
+            );
         }
 
         return (
             <TextInput
                 mode="outlined"
                 placeholder="在此输入您的回答..."
-                value={selectedAnswer || ''}
+                value={selectedAnswerValue}
                 onChangeText={setSelectedAnswer}
                 disabled={disabled}
                 multiline={question.type === 'short'}
@@ -703,17 +713,14 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
 function ResultFeedback({ showResult, isCorrect, isRevealedOnly, theme, correct_answer, explanation, questionType }: any) {
     if (!showResult && !isRevealedOnly) return null;
 
-    const successColor = theme.colors.primary === '#006D3A' ? '#4CAF50' : theme.colors.primary;
-
     const normalizeTF = (val: any) => {
         if (val === null || val === undefined) return '';
         const s = val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toUpperCase();
-        if (s === 'TRUE' || s === 'T' || s === '1' || s === '正确' || s === '对' || val === true) return 'T';
-        if (s === 'FALSE' || s === 'F' || s === '0' || s === '错误' || s === '错' || val === false) return 'F';
+        if (['TRUE', 'T', '1', '正确', '对'].includes(s) || val === true) return 'T';
+        if (['FALSE', 'F', '0', '错误', '错'].includes(s) || val === false) return 'F';
         return s;
     };
 
-    // 判断题的答案转换
     const displayAnswer = (() => {
         if (questionType !== 'true_false') return correct_answer;
         const norm = normalizeTF(correct_answer);
@@ -722,36 +729,33 @@ function ResultFeedback({ showResult, isCorrect, isRevealedOnly, theme, correct_
         return correct_answer || '未设置';
     })();
 
+    const bgColor = isRevealedOnly ? '#F3F4F6' : (isCorrect ? '#F0FDF4' : '#FEF2F2');
+    const borderColor = isRevealedOnly ? '#E5E7EB' : (isCorrect ? '#DCFCE7' : '#FEE2E2');
+    const textColor = isRevealedOnly ? '#374151' : (isCorrect ? '#166534' : '#991B1B');
+
     return (
-        <View style={[
-            styles.resultContainer,
-            { shadowColor: theme.colors.shadow },
-            !isRevealedOnly && {
-                backgroundColor: isCorrect ? theme.colors.surfaceVariant : theme.colors.surfaceVariant,
-                borderColor: isCorrect ? successColor : theme.colors.error
-            },
-            isRevealedOnly && {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.outlineVariant,
-            }
-        ]}>
+        <View style={[styles.resultContainer, { backgroundColor: bgColor, borderColor: borderColor }]}>
             {!isRevealedOnly && (
-                <Text variant="titleMedium" style={{ color: isCorrect ? successColor : theme.colors.error, marginBottom: 8, fontWeight: 'bold' }}>
-                    {isCorrect ? '✓ 回答正确' : '✗ 回答错误'}
+                <Text variant="titleMedium" style={{ fontWeight: '800', marginBottom: 12, color: textColor }}>
+                    {isCorrect ? '✨ 回答正确！' : '❌ 回答错误'}
                 </Text>
             )}
 
-            <View style={{ marginBottom: 12 }}>
-                <Text variant="bodyMedium" style={{ fontWeight: 'bold', marginBottom: 4 }}>正确答案：</Text>
-                {/* 使用 MathText 渲染正确答案 */}
-                <View style={{ alignSelf: 'flex-start', minWidth: '100%' }}>
-                    <MathText content={displayAnswer} fontSize={16} color={theme.colors.onSurface} />
+            <View style={{ marginBottom: 10 }}>
+                <Text variant="labelLarge" style={{ fontWeight: 'bold', marginBottom: 6, color: textColor, opacity: 0.8 }}>正确答案</Text>
+                <View style={[styles.revealedAnswerContainer, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: borderColor }]}>
+                    <MathText content={displayAnswer} fontSize={17} color="#1F2937" />
                 </View>
             </View>
 
-            <Divider style={{ marginVertical: 8, opacity: 0.3 }} />
-            <Text variant="bodySmall" style={{ fontStyle: 'italic', opacity: 0.8, marginBottom: 4 }}>解析：</Text>
-            <MathText content={explanation || '暂无详细解析。'} fontSize={14} color={theme.colors.onSurfaceVariant} />
+            {explanation && (
+                <View style={{ marginTop: 6 }}>
+                    <Text variant="labelLarge" style={{ fontWeight: 'bold', marginBottom: 6, color: textColor, opacity: 0.8 }}>解析说明</Text>
+                    <View style={{ padding: 4 }}>
+                        <MathText content={explanation} fontSize={15} color="#4B5563" baseStyle={{ lineHeight: 22 }} />
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
@@ -777,9 +781,9 @@ function FooterControl({
                         <Button mode="outlined" onPress={handlePrev} disabled={currentIndex === 0} style={styles.navButton}>
                             上一题
                         </Button>
-                        <Button 
-                            mode="contained" 
-                            onPress={currentIndex < totalCount - 1 ? handleNext : onComplete} 
+                        <Button
+                            mode="contained"
+                            onPress={currentIndex < totalCount - 1 ? handleNext : onComplete}
                             style={styles.navButton}
                         >
                             {currentIndex < totalCount - 1 ? '下一题' : '完成'}
@@ -788,9 +792,9 @@ function FooterControl({
                 ) : (
                     <View style={styles.footerButtons}>
                         {completed && currentIndex === totalCount - 1 ? (
-                            <Button 
-                                mode="contained" 
-                                onPress={() => navigation.goBack()} 
+                            <Button
+                                mode="contained"
+                                onPress={() => navigation.goBack()}
                                 style={styles.mainButton}
                                 icon="check"
                             >
@@ -844,10 +848,10 @@ function FooterControl({
                     <Button mode="outlined" onPress={handlePrev} disabled={currentIndex === 0} style={styles.navButton} contentStyle={{ height: 48 }}>
                         上一题
                     </Button>
-                    <Button 
-                        mode="contained" 
-                        onPress={currentIndex < totalCount - 1 ? handleNext : onComplete} 
-                        style={styles.navButton} 
+                    <Button
+                        mode="contained"
+                        onPress={currentIndex < totalCount - 1 ? handleNext : onComplete}
+                        style={styles.navButton}
                         contentStyle={{ height: 48 }}
                     >
                         {currentIndex < totalCount - 1 ? '下一题' : '完成'}
@@ -909,10 +913,10 @@ function FooterControl({
                             )}
                         </>
                     ) : (
-                        <Button 
-                            mode="contained" 
-                            onPress={currentIndex < totalCount - 1 ? handleNext : onComplete} 
-                            style={styles.mainButton} 
+                        <Button
+                            mode="contained"
+                            onPress={currentIndex < totalCount - 1 ? handleNext : onComplete}
+                            style={styles.mainButton}
                             contentStyle={{ height: 44 }}
                         >
                             {currentIndex < totalCount - 1 ? '下一题' : '完成'}
@@ -972,22 +976,22 @@ function GridModal({ visible, onDismiss, questions, currentIndex, setCurrentInde
     return (
         <Portal>
             <View style={StyleSheet.absoluteFill}>
-                <Animated.View 
+                <Animated.View
                     style={[
-                        StyleSheet.absoluteFill, 
-                        { 
+                        StyleSheet.absoluteFill,
+                        {
                             backgroundColor: 'rgba(0,0,0,0.3)',
                             opacity: translateY.interpolate({
                                 inputRange: [0, screenHeight],
                                 outputRange: [1, 0],
                             })
                         }
-                    ]} 
+                    ]}
                 >
-                    <TouchableOpacity 
-                        style={StyleSheet.absoluteFill} 
-                        activeOpacity={1} 
-                        onPress={onDismiss} 
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={onDismiss}
                     />
                 </Animated.View>
                 <Animated.View
@@ -1005,7 +1009,7 @@ function GridModal({ visible, onDismiss, questions, currentIndex, setCurrentInde
                     <View style={styles.sheetHandleContainer}>
                         <View style={[styles.sheetHandle, { backgroundColor: theme.colors.outline }]} />
                     </View>
-                    
+
                     <View style={styles.sheetContent}>
                         <Text variant="titleMedium" style={styles.sheetTitle}>快速跳转 ({currentIndex + 1}/{questions.length})</Text>
                         <FlatList
@@ -1068,12 +1072,24 @@ const ErrorBox = ({ theme }: any) => (
 );
 
 function getTypeLabel(type: string) {
-    const map: any = { 'single': '单选', 'multi': '多选', 'true_false': '判断', 'fill': '填空', 'short': '简答' };
-    return map[type] || '题目';
+    const map: any = { 'single': '单项选择', 'multi': '多项选择', 'true_false': '判断题', 'fill': '填空题', 'short': '简答题' };
+    return map[type] || '试题';
 }
 
 function getTypeColor(type: string, theme: any) {
+    if (type === 'single') return '#EEF2FF'; // 浅蓝
+    if (type === 'multi') return '#F5F3FF';  // 浅紫
+    if (type === 'true_false') return '#ECFDF5'; // 浅绿
+    if (type === 'fill') return '#FFFBEB'; // 浅黄
     return theme.colors.surfaceVariant;
+}
+
+function getTypeTextSubColor(type: string) {
+    if (type === 'single') return '#4338CA';
+    if (type === 'multi') return '#6D28D9';
+    if (type === 'true_false') return '#059669';
+    if (type === 'fill') return '#D97706';
+    return '#666';
 }
 
 const ActivityIndicator = ({ size, style }: any) => {
@@ -1084,57 +1100,64 @@ const ActivityIndicator = ({ size, style }: any) => {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    progressBar: { height: 3 },
+    progressBar: { height: 6, borderRadius: 3 },
     scrollContent: { padding: 16, paddingBottom: 24 },
-    scrollItem: { marginBottom: 8 },
-    card: { marginBottom: 20, borderRadius: 16 },
-    questionTextContainer: { flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'wrap' },
-    typeBadgeText: { fontSize: 12, fontWeight: 'bold' },
+    scrollItem: { marginBottom: 16 },
+    card: {
+        marginBottom: 16,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E5E5EA',
+        backgroundColor: '#FFFFFF',
+    },
+    questionTextContainer: { flexDirection: 'row', alignItems: 'flex-start' },
+    typeBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
     typeBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
         alignSelf: 'flex-start',
-        marginBottom: 8,
+        marginBottom: 12,
+        marginRight: 10,
     },
-    optionsContainer: { marginBottom: 20 },
-    flashcardContainer: { flex: 1, padding: 10, minHeight: 400 },
-    flashcard: { 
-        flex: 1, 
-        borderRadius: 24, 
-        borderWidth: 1, 
-        elevation: 4, 
-        shadowOffset: { width: 0, height: 4 }, 
-        shadowOpacity: 0.1, 
-        shadowRadius: 8 
+    optionsContainer: { marginBottom: 24 },
+    flashcardContainer: { flex: 1, padding: 16, minHeight: 450 },
+    flashcard: {
+        flex: 1,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: '#E5E5EA',
+        backgroundColor: '#FFFFFF',
     },
-    flashcardPart: { flex: 1, padding: 24 },
+    flashcardPart: { flex: 1, padding: 32 },
 
 
     // Result Feedback Styles
-    tapTip: { textAlign: 'center', fontSize: 12, marginTop: 40, opacity: 0.6 },
-    masteryButton: { flex: 1, marginHorizontal: 8, borderRadius: 12, height: 48, justifyContent: 'center' },
+    tapTip: { textAlign: 'center', fontSize: 13, marginTop: 40, opacity: 0.5, letterSpacing: 1 },
+    masteryButton: { flex: 1, marginHorizontal: 8, borderRadius: 16, height: 52 },
     optionRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 12,
-        borderRadius: 16,
-        marginBottom: 10,
-        borderWidth: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        marginBottom: 12,
+        borderWidth: 1.5,
         borderColor: 'transparent'
     },
-    optionContent: { flex: 1, marginLeft: 8 },
-    textInput: { marginBottom: 10 },
-    errorBox: { padding: 16, borderRadius: 12, borderWidth: 1 },
+    optionContent: { flex: 1, marginLeft: 10 },
+    textInput: { marginBottom: 12 },
+    errorBox: { padding: 20, borderRadius: 16, borderWidth: 1, alignItems: 'center' },
     resultContainer: {
-        padding: 16, borderRadius: 16, marginTop: 4, borderWidth: 1,
-        shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
+        padding: 20,
+        borderRadius: 20,
+        marginTop: 8,
+        borderWidth: 1,
     },
     revealedAnswerContainer: {
-        padding: 12,
-        borderRadius: 8,
-        marginTop: 8,
+        padding: 16,
+        borderRadius: 14,
+        marginTop: 12,
     },
     footer: {
         borderTopWidth: 1,
@@ -1173,11 +1196,8 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         borderTopWidth: 1,
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+        borderColor: '#E5E5EA',
+        backgroundColor: '#FFFFFF',
         overflow: 'hidden',
     },
     sheetHandleContainer: {

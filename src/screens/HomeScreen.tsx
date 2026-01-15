@@ -329,25 +329,27 @@ qb.*,
                     }
                     ListHeaderComponent={
                         reviewCount > 0 ? (
-                            <View style={[styles.modernCard, { backgroundColor: theme.colors.surface, marginBottom: 20, borderColor: theme.colors.outlineVariant, shadowColor: theme.colors.shadow, overflow: 'visible', borderWidth: 1 }]}>
+                            <View style={[styles.reviewHintCard, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.shadow }]}>
                                 <Pressable
                                     onPress={() => navigation.navigate('SrsReview')}
                                     style={({ pressed }) => [
-                                        { flex: 1, borderRadius: 16, padding: 16 },
-                                        pressed && { backgroundColor: theme.colors.onSurfaceVariant + '14' }
+                                        { flex: 1, borderRadius: 24, padding: 20 },
+                                        pressed && { opacity: 0.9 }
                                     ]}
                                 >
                                     <View style={styles.headerCardContent}>
                                         <View style={styles.cardInfo}>
                                             <View style={styles.titleRow}>
-                                                <Avatar.Icon size={24} icon="calendar-check" style={{ backgroundColor: theme.colors.primary, marginRight: 8 }} color={theme.colors.onPrimary} />
-                                                <Text variant="titleMedium" style={[styles.bankName, { color: theme.colors.onSurface }]}>今日待复习</Text>
+                                                <Avatar.Icon size={32} icon="calendar-check" style={{ backgroundColor: 'rgba(255,255,255,0.2)', marginRight: 12 }} color="#FFF" />
+                                                <View>
+                                                    <Text variant="titleMedium" style={{ color: '#FFF', fontWeight: 'bold' }}>今日待复习</Text>
+                                                    <Text variant="bodySmall" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                                                        已有 {reviewCount} 道题目等待巩固
+                                                    </Text>
+                                                </View>
                                             </View>
-                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, opacity: 0.8 }}>
-                                                已有 {reviewCount} 道题目等待巩固
-                                            </Text>
                                         </View>
-                                        <IconButton icon="chevron-right" size={24} iconColor={theme.colors.onSurfaceVariant} />
+                                        <IconButton icon="chevron-right" size={24} iconColor="#FFF" />
                                     </View>
                                 </Pressable>
                             </View>
@@ -383,15 +385,15 @@ qb.*,
                                             <View style={styles.titleRow}>
                                                 <Text variant="titleMedium" style={styles.bankName}>{item.name}</Text>
                                                 {item.subscription_id ? (
-                                                    <IconButton 
-                                                        icon={isSyncing ? "cloud-outline" : "cloud-check-outline"} 
-                                                        size={14} 
-                                                        iconColor={theme.colors.primary} 
-                                                        style={{ margin: 0, marginLeft: 4 }} 
+                                                    <IconButton
+                                                        icon={isSyncing ? "cloud-outline" : "cloud-check-outline"}
+                                                        size={14}
+                                                        iconColor={theme.colors.primary}
+                                                        style={{ margin: 0, marginLeft: 4 }}
                                                     />
                                                 ) : null}
                                             </View>
-                                            
+
                                             {item.remark ? (
                                                 <View style={styles.remarkText}>
                                                     <IconButton icon="bookmark-outline" size={12} iconColor={theme.colors.outline} style={{ margin: 0, width: 14, height: 14 }} />
@@ -509,21 +511,20 @@ qb.*,
 const styles = StyleSheet.create({
     container: { flex: 1 },
     emptyContainer: { alignItems: 'center', marginTop: 100, opacity: 0.5 },
-    reviewCard: { marginBottom: 20, borderRadius: 16, overflow: 'hidden' },
 
     modernCard: {
-        marginBottom: 12,
+        marginBottom: 16,
         borderRadius: 20,
         padding: 0,
-        flexDirection: 'row',
-        alignItems: 'stretch',
-        justifyContent: 'space-between',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
+        backgroundColor: '#FFFFFF',
         borderWidth: 1,
-        minHeight: 70,
+        borderColor: '#E5E5EA',
+        minHeight: 84,
+        overflow: 'hidden',
+    },
+    reviewHintCard: {
+        marginBottom: 24,
+        borderRadius: 20,
         overflow: 'hidden',
     },
     headerCardContent: {
@@ -535,51 +536,55 @@ const styles = StyleSheet.create({
     cardInfo: {
         flex: 1,
         justifyContent: 'center',
+        paddingRight: 8,
     },
     titleRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 2,
+        marginBottom: 4,
     },
     bankName: {
         fontWeight: '700',
-        fontSize: 16,
-        letterSpacing: -0.2,
+        fontSize: 17,
+        letterSpacing: -0.4,
+        color: '#1C1C1E',
     },
     remarkText: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 2,
+        marginBottom: 4,
+        opacity: 0.7,
     },
     syncTime: {
-        fontSize: 10,
-        opacity: 0.6,
+        fontSize: 11,
+        color: '#8E8E93',
+        marginTop: 2,
     },
     cardBadges: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 6,
     },
     modernBadge: {
         flexDirection: 'row',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 10,
-        minWidth: 40,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 2,
+        gap: 3,
     },
     modernBadgeText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        lineHeight: 14,
+        fontSize: 13,
+        fontWeight: '700',
+        lineHeight: 16,
     },
-
     swipeActions: {
         width: 250,
         marginBottom: 16,
         flexDirection: 'row',
+        borderRadius: 24,
+        overflow: 'hidden',
     },
     swipeAction: {
         flex: 1,
@@ -594,5 +599,21 @@ const styles = StyleSheet.create({
     bankOption: {
         padding: 12,
         borderBottomWidth: 1,
+    },
+    toastContainer: {
+        position: 'absolute',
+        bottom: 50,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+    },
+    toastBody: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 20,
+    },
+    toastText: {
+        color: '#FFF',
+        fontSize: 14,
     }
 });
