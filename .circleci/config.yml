@@ -5,8 +5,8 @@ jobs:
     docker:
       - image: cimg/android:2024.01.1-node
     environment:
-      JAVA_OPTS: "-Xmx4g"
-      GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g"
+      JAVA_OPTS: "-Xmx3g"
+      GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g -Dorg.gradle.workers.max=2 -Dkotlin.daemon.jvm.options=-Xmx2g"
     resource_class: large
     steps:
       - checkout
