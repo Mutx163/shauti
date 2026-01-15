@@ -523,6 +523,14 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
     const disabled = showResult;
     const successColor = theme.colors.primary === '#006D3A' ? '#4CAF50' : theme.colors.primary;
 
+    const normalizeTF = (val: any) => {
+        if (val === null || val === undefined) return '';
+        const s = val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toUpperCase();
+        if (s === 'TRUE' || s === 'T' || s === '1' || s === '正确' || s === '对' || val === true) return 'T';
+        if (s === 'FALSE' || s === 'F' || s === '0' || s === '错误' || s === '错' || val === false) return 'F';
+        return s;
+    };
+
     if (question.type === 'single' || question.type === 'true_false') {
         const isBool = question.type === 'true_false';
         const renderOpts = isBool ? { 'T': '正确', 'F': '错误' } : options;
@@ -534,7 +542,9 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
             <View>
                 {entries.map(([key, value]: any) => {
                     const isSelected = selectedAnswer === key;
-                    const isCorrect = question.correct_answer === key;
+                    const isCorrect = isBool 
+                        ? normalizeTF(question.correct_answer) === key 
+                        : question.correct_answer === key;
                     const isRevealed = showResult || quizMode === 'study';
                     const highlight = isSelected || (quizMode === 'study' && isCorrect);
 
@@ -695,10 +705,22 @@ function ResultFeedback({ showResult, isCorrect, isRevealedOnly, theme, correct_
 
     const successColor = theme.colors.primary === '#006D3A' ? '#4CAF50' : theme.colors.primary;
 
+    const normalizeTF = (val: any) => {
+        if (val === null || val === undefined) return '';
+        const s = val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toUpperCase();
+        if (s === 'TRUE' || s === 'T' || s === '1' || s === '正确' || s === '对' || val === true) return 'T';
+        if (s === 'FALSE' || s === 'F' || s === '0' || s === '错误' || s === '错' || val === false) return 'F';
+        return s;
+    };
+
     // 判断题的答案转换
-    const displayAnswer = questionType === 'true_false'
-        ? (correct_answer === 'T' || correct_answer === 't' || correct_answer === 'true' ? '正确' : '错误')
-        : correct_answer;
+    const displayAnswer = (() => {
+        if (questionType !== 'true_false') return correct_answer;
+        const norm = normalizeTF(correct_answer);
+        if (norm === 'T') return '正确';
+        if (norm === 'F') return '错误';
+        return correct_answer || '未设置';
+    })();
 
     return (
         <View style={[

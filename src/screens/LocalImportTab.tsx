@@ -51,9 +51,14 @@ export default function LocalImportTab() {
         Papa.parse(csvContent, {
             header: true,
             skipEmptyLines: true,
+            transformHeader: (header: string) => header.replace(/^\uFEFF/, '').trim(),
+            transform: (value: any) => typeof value === 'string' ? value.replace(/[\u200B-\u200D\uFEFF]/g, '').trim() : value,
             complete: async (results) => {
                 try {
-                    await saveToDatabase(results.data, bankName);
+                    const firstRow: any = results.data.find((r: any) => r && Object.keys(r).length > 0) || {};
+                    const bankKey = Object.keys(firstRow).find(k => ['bank', '题库', 'Bank', 'category', '分类'].includes(k));
+                    const inferredName = bankKey ? (firstRow[bankKey] || bankName) : bankName;
+                    await saveToDatabase(results.data, inferredName);
                     setLoading(false);
                     Alert.alert('成功', '题库已同步至本地');
                     navigation.navigate('Main', { screen: 'HomeTab' });
@@ -73,50 +78,167 @@ export default function LocalImportTab() {
         const db = getDB();
 
         try {
-            const bankResult = await db.runAsync(
-                'INSERT INTO question_banks (name, description) VALUES (?, ?)',
-                fileName.replace('.csv', '').replace('.txt', ''),
-                `导入时间: ${new Date().toLocaleString()}`
+            const normalizedBankName = fileName.replace('.csv', '').replace('.txt', '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+            const importDesc = `导入时间: ${new Date().toLocaleString()}`;
+
+            const existing: any = await db.getFirstAsync(
+                'SELECT id FROM question_banks WHERE name = ? AND (subscription_id IS NULL OR subscription_id = 0)',
+                normalizedBankName
             );
 
-            //@ts-ignore
-            const bankId = bankResult.lastInsertRowId;
+            let bankId: number;
+            if (existing?.id) {
+                bankId = existing.id;
+                await db.runAsync(
+                    'UPDATE question_banks SET description = ? WHERE id = ?',
+                    importDesc,
+                    bankId
+                );
+                await db.runAsync('DELETE FROM questions WHERE bank_id = ?', bankId);
+                await db.runAsync('DELETE FROM quiz_sessions WHERE bank_id = ?', bankId);
+            } else {
+                const bankResult: any = await db.runAsync(
+                    'INSERT INTO question_banks (name, description) VALUES (?, ?)',
+                    normalizedBankName,
+                    importDesc
+                );
+                bankId = bankResult.lastInsertRowId;
+            }
+
             const total = data.length;
+            const normalizeCell = (val: any) => {
+                if (val === null || val === undefined) return '';
+                return val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+            };
+            const normalizeToken = (val: any) => normalizeCell(val).toUpperCase();
+            const normalizeTF = (val: any) => {
+                const s = normalizeToken(val);
+                const parts = s.split(/[\s,，;；|]+/).map(p => p.trim()).filter(Boolean);
+                for (const p of parts.length ? parts : [s]) {
+                    if (p === 'TRUE' || p === 'T' || p === '1' || p === '正确' || p === '对') return 'T';
+                    if (p === 'FALSE' || p === 'F' || p === '0' || p === '错误' || p === '错') return 'F';
+                }
+                return '';
+            };
+            const uniqueLetters = (s: string) => {
+                const out: string[] = [];
+                for (const ch of s) {
+                    if (!out.includes(ch)) out.push(ch);
+                }
+                return out.join('');
+            };
+            const isSingleChoice = (s: string) => /^[ABCD]$/.test(s);
+            const isMultiChoice = (s: string) => /^[ABCD]{2,4}$/.test(s) && uniqueLetters(s).length === s.length;
+            const pickAnswerFromCandidates = (questionType: string, candidates: string[]) => {
+                const cleaned = candidates.map(c => normalizeCell(c)).filter(Boolean);
+
+                if (questionType === 'true_false') {
+                    for (const c of cleaned) {
+                        const tf = normalizeTF(c);
+                        if (tf) return tf;
+                    }
+                    return '';
+                }
+
+                if (questionType === 'single') {
+                    for (const c of cleaned) {
+                        const first = normalizeToken(c).split(/[,\s，;；|]+/)[0] || '';
+                        const t = first.replace(/[^ABCD]/g, '');
+                        if (isSingleChoice(t)) return t;
+                    }
+                    return '';
+                }
+
+                if (questionType === 'multi') {
+                    for (const c of cleaned) {
+                        const first = normalizeToken(c).split(/[,\s，;；|]+/)[0] || '';
+                        const t = uniqueLetters(first.replace(/[^ABCD]/g, ''));
+                        if (isMultiChoice(t)) return t;
+                    }
+                    return '';
+                }
+
+                return cleaned[0] || '';
+            };
 
             for (let i = 0; i < total; i++) {
                 const row = data[i];
+                const findValue = (keys: string[]) => {
+                    const foundKey = Object.keys(row).find(k => keys.includes(k.replace(/^\uFEFF/, '').trim()));
+                    return foundKey ? row[foundKey] : undefined;
+                };
+
+                const cleanOption = (text: string, label: string) => {
+                    if (!text) return '';
+                    const regex = new RegExp(`^${label}[\\s\\.、．]*`, 'i');
+                    return text.toString().replace(regex, '').trim();
+                };
 
                 const options = {
-                    A: row.A || '',
-                    B: row.B || '',
-                    C: row.C || '',
-                    D: row.D || '',
+                    A: cleanOption(findValue(['A', 'OptionA']) || '', 'A'),
+                    B: cleanOption(findValue(['B', 'OptionB']) || '', 'B'),
+                    C: cleanOption(findValue(['C', 'OptionC']) || '', 'C'),
+                    D: cleanOption(findValue(['D', 'OptionD']) || '', 'D'),
                 };
 
                 const typeMapping: any = {
-                    '单选': 'single',
-                    'single': 'single',
-                    '多选': 'multi',
-                    'multi': 'multi',
-                    '判断': 'true_false',
-                    'true_false': 'true_false',
-                    '填空': 'fill',
-                    'fill': 'fill',
-                    '简答': 'short',
-                    'short': 'short'
+                    'single': 'single', '单选': 'single', '单选题': 'single',
+                    'multi': 'multi', '多选': 'multi', '多选题': 'multi',
+                    'true_false': 'true_false', '判断': 'true_false', '判断题': 'true_false',
+                    'fill': 'fill', '填空': 'fill', '填空题': 'fill',
+                    'short': 'short', '简答': 'short', '简答题': 'short'
                 };
 
-                const type = typeMapping[row.type] || 'single';
+                const rawType = normalizeCell(findValue(['type', '类型'])) || 'single';
+                const type = typeMapping[rawType] || typeMapping[rawType.toLowerCase()] || 'single';
+                const content = findValue(['content', 'question', '题目']) || '题目内容丢失';
+                const rawAnswer = normalizeCell(findValue(['answer', 'correct_answer', '答案']));
+                const rawExplanation = normalizeCell(findValue(['explanation', 'analysis', '解析']));
+                const extra = Array.isArray((row as any).__parsed_extra)
+                    ? (row as any).__parsed_extra.map((v: any) => normalizeCell(v)).filter(Boolean).join(',')
+                    : '';
+
+                const answer = pickAnswerFromCandidates(type, [
+                    rawAnswer,
+                    rawExplanation,
+                    normalizeCell(options.A),
+                    normalizeCell(options.B),
+                    normalizeCell(options.C),
+                    normalizeCell(options.D),
+                    extra
+                ]);
+
+                let explanation = rawExplanation;
+                const answerLooksInvalidForType = (() => {
+                    if (type === 'true_false') return !normalizeTF(answer);
+                    if (type === 'single') return !isSingleChoice(normalizeToken(answer).replace(/[^ABCD]/g, ''));
+                    if (type === 'multi') return !isMultiChoice(uniqueLetters(normalizeToken(answer).replace(/[^ABCD]/g, '')));
+                    return false;
+                })();
+
+                if (!explanation || normalizeTF(explanation) || isSingleChoice(normalizeToken(explanation).replace(/[^ABCD]/g, ''))) {
+                    if (rawAnswer && rawAnswer !== answer && rawAnswer.length > 2) {
+                        explanation = rawAnswer;
+                    }
+                }
+
+                if (answerLooksInvalidForType && rawAnswer && rawAnswer.length > 2 && !normalizeTF(rawAnswer)) {
+                    explanation = explanation || rawAnswer;
+                }
+
+                if (extra) {
+                    explanation = explanation ? `${explanation}\n${extra}` : extra;
+                }
 
                 await db.runAsync(
                     `INSERT INTO questions (bank_id, type, content, options, correct_answer, explanation) 
            VALUES (?, ?, ?, ?, ?, ?)`,
                     bankId,
                     type,
-                    row.content || '题目内容丢失',
+                    content,
                     JSON.stringify(options),
-                    row.answer?.toString() || '',
-                    row.explanation || ''
+                    answer,
+                    explanation
                 );
 
                 setProgress((i + 1) / total);
@@ -268,84 +390,60 @@ export default function LocalImportTab() {
 
 【格式要求】
 1. 第一行必须是列名（表头）：bank_id,bank,type,content,A,B,C,D,answer,explanation
-2. 从第二行开始才是题目数据
-3. 每个字段用英文逗号分隔
-4. 如果字段内容包含逗号、换行或引号，必须用双引号包裹整个字段
-5. 字段内的双引号要写成两个双引号 ""
+2. **必须包含全部 10 列**，explanation 列即使没有内容也要留空
+3. 从第二行开始才是题目数据
+4. 每个字段用英文逗号分隔
+5. 如果字段内容包含逗号、换行或引号，必须用双引号包裹整个字段
+6. 字段内的双引号要写成两个双引号 ""
 
-【列说明】
-- bank_id: 题库唯一标识（必填，极其重要！）
-  * **格式：16位随机十六进制数字**
-  * **生成方法**：使用你的 UUID 生成能力，为每个题库生成一个全球唯一的16位hex字符串
-  * 正确示例：\`a3f7b8c9d2e14f6a\`、\`7b2e9f4c1a8d6e3b\`
-  * 错误示例：\`bank_001\`、\`math_01\`（太简单，容易碰撞）
-  * **关键规则**：
-    - 同一题库的所有题目必须使用完全相同的 bank_id
-    - 即使题库名称改变，bank_id 也永远不能变
-    - 每个题库的 bank_id 必须是独一无二的随机值
-    - 确保16位长度，全部使用小写字母和数字
+【列说明 - 共10列，缺一不可】
+1. bank_id: 题库唯一标识（必填）
+   * 格式：16位随机十六进制数字（如 a3f7b8c9d2e14f6a）
+   * 同一题库的所有题目必须使用完全相同的 bank_id
 
-- bank: 题库名称（必填）
-  * 题库的显示名称，可以包含中文
-  * 例如：工程力学、高等数学、英语四级
+2. bank: 题库名称（必填，如"高等数学"）
 
-- type: 题目类型（必填），只能是以下之一
-  * single (单选题)
-  * multi (多选题)
-  * true_false (判断题)
-  * fill (填空题)
-  * short (简答题)
-  
-- content: 题目内容（必填）
-  * 可以包含 LaTeX 公式，用 $ 符号包裹，例如：$x^2$
-  * 如果内容有逗号或换行，用双引号包裹
+3. type: 题目类型（必填），只能是以下之一
+   * single (单选题)
+   * multi (多选题)
+   * true_false (判断题)
+   * fill (填空题)
+   * short (简答题)
+   
+4. content: 题目内容（必填）
 
-- A, B, C, D: 选项内容
-  * 只有选择题需要填写
-  * 不要包含 "A."、"A、" 等前缀
-  * 判断题、填空题、简答题这4列留空
+5-8. A, B, C, D: 选项内容
+   * 选择题填写选项内容（不要带"A."前缀）
+   * **判断题、填空题、简答题这4列必须留空（写空字符串）**
 
-- answer: 正确答案（必填）
-  * 单选题：A 或 B 或 C 或 D
-  * 多选题：ABCD（多个选项直接连写，如 ABC）
-  * 判断题：T 或 F
-  * 填空题/简答题：标准答案文本
+9. answer: 正确答案（必填）
+   * 单选题：A 或 B 或 C 或 D
+   * 多选题：ABC（多个选项直接连写）
+   * **判断题：T 或 F（只能是这两个字母）**
+   * 填空题/简答题：标准答案文本
 
-- explanation: 解析（可选）
+10. explanation: 解析（**此列必须存在**，可以留空但不能省略整列）
 
-【正确示例 - 单题库】
+【判断题正确示例】⭐
+bank_id,bank,type,content,A,B,C,D,answer,explanation
+a3f7b8c9d2e14f6a,高等数学,true_false,圆周率是无理数。,,,,T,圆周率π是无理数，不能表示为分数
+a3f7b8c9d2e14f6a,高等数学,true_false,1+1=3,,,,F,1+1=2才是正确的
+
+【单选题正确示例】
 bank_id,bank,type,content,A,B,C,D,answer,explanation
 a3f7b8c9d2e14f6a,高等数学,single,以下哪个是质数？,2,4,6,8,A,质数只能被1和自身整除
-a3f7b8c9d2e14f6a,高等数学,multi,以下哪些是偶数？,2,3,4,5,AC,2和4都是偶数
-a3f7b8c9d2e14f6a,高等数学,fill,圆的面积公式是____。,,,,$\\pi r^2$,其中r是半径
 
-【正确示例 - 多题库】
+【多选题正确示例】
 bank_id,bank,type,content,A,B,C,D,answer,explanation
-7b2e9f4c1a8d6e3b,物理学,single,牛顿第一定律又称？,惯性定律,力学定律,能量定律,动量定律,A,
-7b2e9f4c1a8d6e3b,物理学,true_false,光速是宇宙中最快的速度。,,,,T,根据相对论
-d5a8c3f1e9b7243a,英语四级,single,Apple的中文意思是？,香蕉,苹果,橙子,梨,B,
-
+a3f7b8c9d2e14f6a,高等数学,multi,以下哪些是偶数？,2,3,4,5,AC,2和4都是偶数
 
 【常见错误】
-❌ 缺少 bank_id 列
-❌ bank_id 使用简单字符串（如 bank_001）而不是16位随机hex
-❌ 同一题库的题目使用了不同的 bank_id
-❌ bank_id 包含中文、特殊符号或大写字母
-❌ 列名写成中文或大小写错误
-❌ 选项包含 "A." 前缀
-❌ 多选题答案写成 "A,B,C" 而不是 "ABC"
-❌ 判断题答案写成 "对/错" 而不是 "T/F"
-❌ 字段包含逗号但没用双引号包裹
-❌ 第一行直接写题目而不是表头
+❌ 缺少 explanation 列（只有9列而不是10列）
+❌ 判断题的 A/B/C/D 列填了内容（应该全部留空）
+❌ 判断题答案写成"对/错"而不是"T/F"
+❌ 判断题答案放到了 D 列而不是 answer 列
 
-【重要说明】
-- **为每个题库生成一个全球唯一的 bank_id**：使用16位随机十六进制数字（如 a3f7b8c9d2e14f6a）
-- **生成方法**：调用你的 UUID 生成功能，确保每个题库的 ID 都是独一无二的随机值
-- 同一题库的所有题目必须共享完全相同的 bank_id
-- bank_id 一旦生成就永远不要修改，即使题库名称改变
-- 16位hex格式示例："a3f7b8c9d2e14f6a"（全部小写，只包含0-9和a-f）
-
-请严格按照以上格式输出，不要添加任何 Markdown 代码块标记，直接输出纯文本 CSV 内容。`;
+请严格按照以上格式输出，确保每行都有 10 个字段（用逗号分隔），不要添加任何 Markdown 代码块标记，直接输出纯文本 CSV 内容。`;
                                 await Clipboard.setStringAsync(prompt);
                                 Alert.alert('已复制', 'AI 整理指令已复制到剪贴板\\n\\n使用步骤：\\n1. 将指令发送给 AI（如 ChatGPT）\\n2. 将您的题目粘贴在指令下方\\n3. 复制 AI 返回的 CSV 内容\\n4. 返回本应用，在"粘贴代码导入"中粘贴');
                             }}

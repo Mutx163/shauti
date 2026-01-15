@@ -16,12 +16,12 @@ interface RemoteBank {
     questions: RemoteQuestion[];
 }
 
-// 常用镜像源基准
+// 常用镜像源基准（按中国区可用性排序）
 const PROXY_BASES = [
-    'https://ghp.ci/',
-    'https://ghproxy.net/',
-    'https://raw.gitmirror.com/',
-    'https://mirror.ghproxy.com/',
+    'https://ghproxy.net/',          // 中国区稳定
+    'https://mirror.ghproxy.com/',   // 备用镜像
+    'https://raw.gitmirror.com/',    // 国内镜像
+    // 'https://ghp.ci/',            // 国际线路，国内不稳定，暂时禁用
 ];
 
 // 记录当前同步周期内失效的镜像基准
@@ -143,30 +143,59 @@ const cleanOption = (text: string, label: string) => {
 };
 
 const parseRow = (row: any): RemoteQuestion | null => {
-    const content = row.question || row.content || row['题目'] || row['问题'] || '';
-    if (!content || content === 'question' || content === '题目') return null;
+    const findValue = (keys: string[]) => {
+        const foundKey = Object.keys(row).find(k => keys.includes(k.replace(/^\uFEFF/, '').trim()));
+        return foundKey ? row[foundKey] : undefined;
+    };
+
+    const content = findValue(['content', 'question', '题目']) || '';
+    if (!content || content === 'content' || content === 'question' || content === '题目') return null;
 
     const optionsObj = {
-        A: cleanOption(row.A || row.OptionA || '', 'A'),
-        B: cleanOption(row.B || row.OptionB || '', 'B'),
-        C: cleanOption(row.C || row.OptionC || '', 'C'),
-        D: cleanOption(row.D || row.OptionD || '', 'D'),
+        A: cleanOption(findValue(['A', 'OptionA']) || '', 'A'),
+        B: cleanOption(findValue(['B', 'OptionB']) || '', 'B'),
+        C: cleanOption(findValue(['C', 'OptionC']) || '', 'C'),
+        D: cleanOption(findValue(['D', 'OptionD']) || '', 'D'),
     };
 
     const typeMapping: any = {
-        '单选': 'single', '单选题': 'single', 'single': 'single',
-        '多选': 'multi', '多选题': 'multi', 'multi': 'multi',
-        '判断': 'true_false', '判断题': 'true_false', 'true_false': 'true_false',
-        '填空': 'fill', '填空题': 'fill', 'fill': 'fill',
-        '简答': 'short', '简答题': 'short', 'short': 'short'
+        'single': 'single', '单选': 'single', '单选题': 'single',
+        'multi': 'multi', '多选': 'multi', '多选题': 'multi',
+        'true_false': 'true_false', '判断': 'true_false', '判断题': 'true_false',
+        'fill': 'fill', '填空': 'fill', '填空题': 'fill',
+        'short': 'short', '简答': 'short', '简答题': 'short'
     };
 
+    const rawType = findValue(['type', '类型']) || 'single';
+    const questionType = typeMapping[rawType] || 'single';
+
+    // 读取原始值
+    let rawAnswer = findValue(['answer', 'correct_answer', '答案']);
+    let rawExplanation = findValue(['explanation', 'analysis', '解析']);
+
+    // 🔧 判断题特殊处理：检测列错位情况
+    // 如果 D 列是 T/F 且 answer 列是解析内容，则修正
+    if (questionType === 'true_false') {
+        const dValue = (optionsObj.D || '').toString().trim().toUpperCase();
+        const isTF = dValue === 'T' || dValue === 'F' || dValue === 'TRUE' || dValue === 'FALSE' ||
+            dValue === '正确' || dValue === '错误' || dValue === '对' || dValue === '错';
+
+        if (isTF && rawAnswer && rawAnswer.length > 10) {
+            // D 列是 T/F，answer 列是解析内容 -> 修正
+            console.log('[CSV修正] 判断题列错位，已自动修正');
+            rawExplanation = rawAnswer;
+            rawAnswer = dValue;
+            // 清空 D 列（因为判断题不应该有 D 选项）
+            optionsObj.D = '';
+        }
+    }
+
     return {
-        type: typeMapping[row.type] || 'single',
+        type: questionType,
         content: content,
         options: JSON.stringify(optionsObj),
-        correct_answer: row.answer || row.correct_answer || '',
-        explanation: row.explanation || row.analysis || ''
+        correct_answer: (rawAnswer || '').toString().trim(),
+        explanation: (rawExplanation || '').toString().trim()
     };
 };
 
@@ -175,6 +204,8 @@ const parseCsvToBanks = (csvContent: string, defaultName: string): Promise<Remot
         Papa.parse(csvContent, {
             header: true,
             skipEmptyLines: true,
+            transformHeader: (header: string) => header.replace(/^\uFEFF/, '').trim(),
+            transform: (value: any) => typeof value === 'string' ? value.replace(/[\u200B-\u200D\uFEFF]/g, '').trim() : value,
             complete: (results) => {
                 const banksMap = new Map<string, { name: string; questions: RemoteQuestion[] }>();
                 const orderedBanks: string[] = [];
@@ -397,7 +428,7 @@ export const SubscriptionService = {
                 try {
                     const apiUrl = getBustedUrl(`https://api.github.com/gists/${gistId}`);
                     const apiRes = await fetchWithTimeout(apiUrl, 5000);
-                    
+
                     if (apiRes.ok) {
                         const gistData = await apiRes.json();
                         const files: any[] = Object.values(gistData.files);
@@ -433,13 +464,13 @@ export const SubscriptionService = {
                         try {
                             const targetUrl = getBustedUrl(rawUrl);
                             if (force) console.log(`[GlobalSync] 尝试 Raw URL 降级: ${targetUrl}`);
-                            
+
                             const response = await fetchWithRetry(targetUrl, force);
                             if (response.ok) {
                                 const text = await response.text();
                                 // 验证是否为 HTML (Gist 404 页或其他错误页)
                                 if (text.trim().startsWith('<')) continue;
-                                
+
                                 config = safeJsonParse(text);
                                 if (config) {
                                     sourceFile = rawUrl.split('/').pop() || 'raw';

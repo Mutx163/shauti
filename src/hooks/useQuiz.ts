@@ -109,12 +109,50 @@ export const useQuiz = () => {
                 result = await db.getAllAsync<Question>(query, ...params);
             }
 
+            const stripInvisible = (val: any) => {
+                if (val === null || val === undefined) return '';
+                return val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+            };
+            const normalizeTF = (val: any) => {
+                const s = stripInvisible(val).toUpperCase();
+                const parts = s.split(/[\s,，;；|]+/).map(p => p.trim()).filter(Boolean);
+                for (const p of parts.length ? parts : [s]) {
+                    if (p === 'TRUE' || p === 'T' || p === '1' || p === '正确' || p === '对') return 'T';
+                    if (p === 'FALSE' || p === 'F' || p === '0' || p === '错误' || p === '错') return 'F';
+                }
+                return '';
+            };
+            const normalizeChoice = (val: any) => stripInvisible(val).toUpperCase().split(/[\s,，;；|]+/)[0] || '';
+            const isSingleChoice = (s: string) => /^[ABCD]$/.test(s);
+            const isMultiChoice = (s: string) => /^[ABCD]{2,4}$/.test(s);
+
+            result = result.map(q => {
+                if (!q) return q;
+                if (q.type === 'true_false') {
+                    // 直接标准化 correct_answer，不做交换逻辑
+                    const ca = normalizeTF(q.correct_answer);
+                    // 如果标准化成功（得到 T 或 F），使用标准化值；否则保留原值
+                    return { ...q, correct_answer: ca || stripInvisible(q.correct_answer) };
+                }
+                if (q.type === 'single') {
+                    // 直接标准化，移除不可靠的交换逻辑
+                    const ca = normalizeChoice(q.correct_answer);
+                    return { ...q, correct_answer: ca || stripInvisible(q.correct_answer) };
+                }
+                if (q.type === 'multi') {
+                    // 直接标准化，移除不可靠的交换逻辑
+                    const ca = normalizeChoice(q.correct_answer).replace(/[^ABCD]/g, '');
+                    return { ...q, correct_answer: ca || stripInvisible(q.correct_answer) };
+                }
+                return { ...q, correct_answer: stripInvisible(q.correct_answer) };
+            });
+
             // 3. Load Session
             let savedIndex = 0;
             let savedHistory = new Map();
 
             // --- 核心修改：通过 mode 隔离会话 ---
-            const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode} `;
+            const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode}`;
 
             // 如果是 reset 模式，先删除旧会话
             const { reset = false } = route.params || {};
@@ -266,7 +304,7 @@ VALUES(?, ?, ?, ?, ?)`,
             // --- 核心修改：复习/错题完成后清理会话 ---
             if ((mode === 'review' || mode === 'mistake') && bankId) {
                 const db = getDB();
-                const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode} `;
+                const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode}`;
                 db.runAsync(
                     'DELETE FROM quiz_sessions WHERE bank_id = ? AND quiz_mode = ?',
                     bankId, modeKey
@@ -316,9 +354,14 @@ VALUES(?, ?, ?, ?, ?)`,
                 const correctArr = currentQuestion.correct_answer.split('').slice().sort();
                 correct = JSON.stringify(selectedArr) === JSON.stringify(correctArr);
             } else if (currentQuestion.type === 'true_false') {
-                // 确保布尔值或 T/F 字符串都能正确匹配
-                const normalizedAnswer = answer === true || answer === 'T' ? 'T' : (answer === false || answer === 'F' ? 'F' : '');
-                correct = normalizedAnswer === currentQuestion.correct_answer;
+                const normalize = (val: any) => {
+                    if (val === null || val === undefined) return '';
+                    const s = val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toUpperCase();
+                    if (s === 'TRUE' || s === 'T' || s === '1' || s === '正确' || s === '对' || val === true) return 'T';
+                    if (s === 'FALSE' || s === 'F' || s === '0' || s === '错误' || s === '错' || val === false) return 'F';
+                    return s;
+                };
+                correct = normalize(answer) === normalize(currentQuestion.correct_answer);
             } else {
                 const normalizedSelected = answer?.toString().trim().toUpperCase();
                 const normalizedCorrect = currentQuestion.correct_answer?.toString().trim().toUpperCase();
@@ -399,7 +442,7 @@ VALUES(?, ?, ?, ?, ?)`,
         if (!bankId || customQuestions) return;
         const db = getDB();
         try {
-            const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode} `;
+            const modeKey = mode === 'bank' ? quizMode : `${mode}_${quizMode}`;
             await db.runAsync(
                 'DELETE FROM quiz_sessions WHERE bank_id = ? AND quiz_mode = ?',
                 bankId, modeKey
