@@ -16,70 +16,18 @@ interface RemoteBank {
     questions: RemoteQuestion[];
 }
 
-// 常用镜像源基准（按中国区可用性排序）
-const PROXY_BASES = [
-    'https://ghproxy.net/',          // 中国区稳定
-    'https://mirror.ghproxy.com/',   // 备用镜像
-    'https://raw.gitmirror.com/',    // 国内镜像
-    // 'https://ghp.ci/',            // 国际线路，国内不稳定，暂时禁用
+// 备用镜像源（仅在直连失败时使用）
+const FALLBACK_MIRRORS = [
+    'https://ghproxy.net/',
 ];
 
-// 记录当前同步周期内失效的镜像基准
-let deadMirrorBases = new Set<string>();
-
-// 镜像辅助
-const getProxiedUrls = (url: string): { url: string; base?: string }[] => {
-    const results: { url: string; base?: string }[] = [];
-
-    // 1. 处理 Gist (gist.github.com 或 gist.githubusercontent.com)
-    const gistMatch = url.match(/gist\.github\.com\/([^\/]+)\/([^\/]+)/);
-    const gistRawMatch = url.match(/gist\.githubusercontent\.com\/([^\/]+)\/([^\/]+)/);
-
-    if (gistMatch || gistRawMatch) {
-        const user = (gistMatch || gistRawMatch)![1];
-        const id = (gistMatch || gistRawMatch)![2];
-        const rawBase = gistRawMatch ? url : `https://gist.githubusercontent.com/${user}/${id}/raw`;
-
-        PROXY_BASES.forEach(p => {
-            if (p.includes('gitmirror')) {
-                results.push({ url: `${p}${user}/${id}/raw`, base: p });
-            } else {
-                results.push({ url: `${p}${rawBase}`, base: p });
-            }
-        });
-        results.push({ url: rawBase });
-        return results;
-    }
-
-    // 2. 处理 GitHub Raw
-    if (url.includes('raw.githubusercontent.com')) {
-        const path = url.split('raw.githubusercontent.com/')[1];
-        PROXY_BASES.forEach(p => {
-            if (p.includes('gitmirror')) {
-                results.push({ url: `${p}${path}`, base: p });
-            } else {
-                results.push({ url: `${p}${url}`, base: p });
-            }
-        });
-        results.push({ url: url });
-        return results;
-    }
-
-    // 3. 其他 URL
-    if (url.startsWith('http')) {
-        PROXY_BASES.forEach(p => {
-            results.push({ url: p.includes('raw.gitmirror.com') ? `${p}${url.replace(/^https?:\/\//, '')}` : `${p}${url}`, base: p });
-        });
-        results.push({ url });
-    }
-
-    return results;
-};
+// 记录失效的镜像（整个会话期间有效）
+let failedMirrors = new Set<string>();
 
 /**
  * 带超时的 fetch
  */
-const fetchWithTimeout = async (url: string, timeout = 10000) => {
+const fetchWithTimeout = async (url: string, timeout = 8000) => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     try {
@@ -100,7 +48,6 @@ const getNameFromUrl = (url: string): string => {
         const decoded = decodeURIComponent(url);
         const parts = decoded.split('/');
         const lastPart = parts[parts.length - 1];
-        // 移除扩展名和 Gist 的 hash 部分
         const cleanName = lastPart.split('?')[0].split('#')[0].replace(/\.(csv|json|txt)$/i, '');
         return cleanName || '未命名订阅';
     } catch (e) {
@@ -108,32 +55,41 @@ const getNameFromUrl = (url: string): string => {
     }
 };
 
+/**
+ * 智能拉取：优先直连，失败时使用镜像
+ */
 const fetchWithRetry = async (url: string, verbose = false) => {
-    const candidates = getProxiedUrls(url);
-    let lastError;
+    // 1. 首先尝试直连（对于中国用户，GitHub Raw 可能可以访问）
+    try {
+        const response = await fetchWithTimeout(url, 6000);
+        if (response.ok) return response;
+    } catch (e) {
+        // 直连失败，尝试镜像
+    }
 
-    for (const { url: tryUrl, base } of candidates) {
-        // 如果该镜像基准已知在当前周期失效，跳过
-        if (base && deadMirrorBases.has(base)) continue;
+    // 2. 尝试镜像
+    for (const mirror of FALLBACK_MIRRORS) {
+        if (failedMirrors.has(mirror)) continue;
 
+        const mirrorUrl = `${mirror}${url}`;
         try {
-            if (verbose) console.log(`[Fetch] 尝试: ${tryUrl}`);
-            const response = await fetchWithTimeout(tryUrl, 8000);
-            if (response.ok) return response;
-
-            if (verbose) console.log(`[Fetch] 失败(${response.status}): ${tryUrl}`);
-            // 如果是 404 等由于路径问题导致的错误，不拉黑镜像本身，仅继续
-        } catch (e: any) {
-            lastError = e;
-            // 网络连接失败或超时，拉黑该镜像基准，避免后续请求继续在它上面浪费时间
-            if (base) {
-                deadMirrorBases.add(base);
-                if (verbose) console.log(`[Fetch] 镜像失效，已标记拉黑: ${base}`);
+            const response = await fetchWithTimeout(mirrorUrl, 6000);
+            if (response.ok) {
+                if (verbose) console.log(`[Sync] 使用镜像成功`);
+                return response;
             }
+        } catch (e) {
+            failedMirrors.add(mirror);
         }
     }
-    throw lastError || new Error(`所有源均尝试失败: ${url}`);
+
+    // 3. 最后再尝试一次直连（可能是临时网络问题）
+    const finalResponse = await fetchWithTimeout(url, 10000);
+    if (finalResponse.ok) return finalResponse;
+
+    throw new Error(`拉取失败: ${url}`);
 };
+
 
 const cleanOption = (text: string, label: string) => {
     if (!text) return '';
@@ -142,62 +98,69 @@ const cleanOption = (text: string, label: string) => {
     return text.replace(regex, '').trim();
 };
 
+// 题目类型映射表
+const TYPE_MAPPING: Record<string, string> = {
+    'single': 'single', '单选': 'single', '单选题': 'single',
+    'multi': 'multi', '多选': 'multi', '多选题': 'multi',
+    'true_false': 'true_false', '判断': 'true_false', '判断题': 'true_false',
+    'fill': 'fill', '填空': 'fill', '填空题': 'fill',
+    'short': 'short', '简答': 'short', '简答题': 'short'
+};
+
+// 从 CSV 行中查找指定列的值
+const findRowValue = (row: any, keys: string[]) => {
+    const foundKey = Object.keys(row).find(k => keys.includes(k.replace(/^\uFEFF/, '').trim()));
+    return foundKey ? row[foundKey] : undefined;
+};
+
+// 解析选项 A/B/C/D
+const parseOptions = (row: any) => ({
+    A: cleanOption(findRowValue(row, ['A', 'OptionA']) || '', 'A'),
+    B: cleanOption(findRowValue(row, ['B', 'OptionB']) || '', 'B'),
+    C: cleanOption(findRowValue(row, ['C', 'OptionC']) || '', 'C'),
+    D: cleanOption(findRowValue(row, ['D', 'OptionD']) || '', 'D'),
+});
+
+// 修正判断题列错位：如果 D 列是 T/F 且 answer 列是解析内容
+const fixTrueFalseColumnShift = (options: any, rawAnswer: string, rawExpl: string) => {
+    const dValue = (options.D || '').toString().trim().toUpperCase();
+    const isTF = ['T', 'F', 'TRUE', 'FALSE', '正确', '错误', '对', '错'].includes(dValue);
+
+    if (isTF && rawAnswer && rawAnswer.length > 10) {
+        return { answer: dValue, explanation: rawAnswer, options: { ...options, D: '' } };
+    }
+    return { answer: rawAnswer, explanation: rawExpl, options };
+};
+
+// 解析 CSV 行为远程题目对象
 const parseRow = (row: any): RemoteQuestion | null => {
-    const findValue = (keys: string[]) => {
-        const foundKey = Object.keys(row).find(k => keys.includes(k.replace(/^\uFEFF/, '').trim()));
-        return foundKey ? row[foundKey] : undefined;
-    };
+    const content = findRowValue(row, ['content', 'question', '题目']) || '';
+    if (!content || ['content', 'question', '题目'].includes(content)) return null;
 
-    const content = findValue(['content', 'question', '题目']) || '';
-    if (!content || content === 'content' || content === 'question' || content === '题目') return null;
+    let options = parseOptions(row);
+    const rawType = findRowValue(row, ['type', '类型']) || 'single';
+    const questionType = TYPE_MAPPING[rawType] || 'single';
 
-    const optionsObj = {
-        A: cleanOption(findValue(['A', 'OptionA']) || '', 'A'),
-        B: cleanOption(findValue(['B', 'OptionB']) || '', 'B'),
-        C: cleanOption(findValue(['C', 'OptionC']) || '', 'C'),
-        D: cleanOption(findValue(['D', 'OptionD']) || '', 'D'),
-    };
+    let rawAnswer = findRowValue(row, ['answer', 'correct_answer', '答案']) || '';
+    let rawExplanation = findRowValue(row, ['explanation', 'analysis', '解析']) || '';
 
-    const typeMapping: any = {
-        'single': 'single', '单选': 'single', '单选题': 'single',
-        'multi': 'multi', '多选': 'multi', '多选题': 'multi',
-        'true_false': 'true_false', '判断': 'true_false', '判断题': 'true_false',
-        'fill': 'fill', '填空': 'fill', '填空题': 'fill',
-        'short': 'short', '简答': 'short', '简答题': 'short'
-    };
-
-    const rawType = findValue(['type', '类型']) || 'single';
-    const questionType = typeMapping[rawType] || 'single';
-
-    // 读取原始值
-    let rawAnswer = findValue(['answer', 'correct_answer', '答案']);
-    let rawExplanation = findValue(['explanation', 'analysis', '解析']);
-
-    // 🔧 判断题特殊处理：检测列错位情况
-    // 如果 D 列是 T/F 且 answer 列是解析内容，则修正
+    // 判断题特殊处理
     if (questionType === 'true_false') {
-        const dValue = (optionsObj.D || '').toString().trim().toUpperCase();
-        const isTF = dValue === 'T' || dValue === 'F' || dValue === 'TRUE' || dValue === 'FALSE' ||
-            dValue === '正确' || dValue === '错误' || dValue === '对' || dValue === '错';
-
-        if (isTF && rawAnswer && rawAnswer.length > 10) {
-            // D 列是 T/F，answer 列是解析内容 -> 修正
-            console.log('[CSV修正] 判断题列错位，已自动修正');
-            rawExplanation = rawAnswer;
-            rawAnswer = dValue;
-            // 清空 D 列（因为判断题不应该有 D 选项）
-            optionsObj.D = '';
-        }
+        const fixed = fixTrueFalseColumnShift(options, rawAnswer, rawExplanation);
+        rawAnswer = fixed.answer;
+        rawExplanation = fixed.explanation;
+        options = fixed.options;
     }
 
     return {
-        type: questionType,
-        content: content,
-        options: JSON.stringify(optionsObj),
-        correct_answer: (rawAnswer || '').toString().trim(),
+        type: questionType as RemoteQuestion['type'],
+        content,
+        options: JSON.stringify(options),
+        correct_answer: rawAnswer.toString().trim(),
         explanation: (rawExplanation || '').toString().trim()
     };
 };
+
 
 const parseCsvToBanks = (csvContent: string, defaultName: string): Promise<RemoteBank[]> => {
     return new Promise((resolve, reject) => {
@@ -394,7 +357,6 @@ export const SubscriptionService = {
 
         // 1. 排他锁检查
         if (isSyncInProgress) {
-            console.log('[GlobalSync] 已有同步任务在运行，跳过本次请求');
             return;
         }
 
@@ -406,11 +368,10 @@ export const SubscriptionService = {
         }
 
         notifySyncStatus(true);
-        // 开启新任务前，清空失效黑名单，给镜像源一次机会
-        if (force) deadMirrorBases.clear();
+        // 开启新任务前，清空失效黑名单
+        if (force) failedMirrors.clear();
 
         try {
-            if (force) console.log(`[GlobalSync] 启动实时同步: ${OFFICIAL_GIST_URL}`);
 
             let config: any = null;
             let sourceFile = 'unknown';
@@ -575,10 +536,18 @@ export const SubscriptionService = {
                 if (force) console.log(`[Sync] Gist API 失败(${id}):`, e.message);
             }
 
-            // 2. Fallback to Raw
+            // 2. Fallback to Raw URL
             if (banks.length === 0) {
                 isFallback = true;
-                const response = await fetchWithRetry(sub.url, force);
+
+                // 从 Gist URL 构建 Raw URL
+                let rawUrl = sub.url;
+                const gistMatch = sub.url.match(/gist\.github\.com\/([^\/]+)\/([a-f0-9]+)/i);
+                if (gistMatch) {
+                    rawUrl = `https://gist.githubusercontent.com/${gistMatch[1]}/${gistMatch[2]}/raw`;
+                }
+
+                const response = await fetchWithRetry(rawUrl, force);
                 const text = await response.text();
                 try {
                     const json = JSON.parse(text);
@@ -611,7 +580,6 @@ export const SubscriptionService = {
 
     async autoSyncAll(force: boolean = false) {
         if (isSyncInProgress) {
-            if (force) console.log('[Sync] 跳过全量刷新：检测到已有任务正处于活跃状态');
             return 0;
         }
 
@@ -634,6 +602,64 @@ export const SubscriptionService = {
         } finally {
             notifySyncStatus(false);
         }
+    },
+
+    /**
+     * 同步单个题库的题目（增量更新以保留 ID 和进度）
+     * @returns 是否有变化
+     */
+    async _syncQuestionsForBank(db: any, bankId: number, questions: RemoteQuestion[]): Promise<boolean> {
+        const existingQs: any[] = await db.getAllAsync(
+            'SELECT id, content, type, options, correct_answer, explanation FROM questions WHERE bank_id = ?',
+            bankId
+        );
+
+        // 建立 content -> questions 映射
+        const contentToIdMap = new Map<string, any[]>();
+        existingQs.forEach(q => {
+            if (!contentToIdMap.has(q.content)) contentToIdMap.set(q.content, []);
+            contentToIdMap.get(q.content)?.push(q);
+        });
+
+        const keptIds = new Set<number>();
+        let hasChanges = false;
+
+        for (const q of questions) {
+            if (!q || !q.content) continue;
+
+            const optionsStr = typeof q.options === 'string' ? q.options : JSON.stringify(q.options || {});
+            const match = contentToIdMap.get(q.content);
+            const existingQ = match && match.length > 0 ? match.shift() : null;
+
+            if (existingQ) {
+                // 检查是否有变化
+                if (existingQ.type !== q.type || existingQ.options !== optionsStr ||
+                    existingQ.correct_answer !== q.correct_answer ||
+                    existingQ.explanation !== (q.explanation || '')) {
+                    hasChanges = true;
+                }
+                await db.runAsync(
+                    `UPDATE questions SET type = ?, options = ?, correct_answer = ?, explanation = ? WHERE id = ?`,
+                    q.type, optionsStr, q.correct_answer || '', q.explanation || '', existingQ.id
+                );
+                keptIds.add(existingQ.id);
+            } else {
+                hasChanges = true;
+                await db.runAsync(
+                    `INSERT INTO questions (bank_id, type, content, options, correct_answer, explanation) VALUES (?, ?, ?, ?, ?, ?)`,
+                    bankId, q.type, q.content, optionsStr, q.correct_answer, q.explanation || ''
+                );
+            }
+        }
+
+        // 删除已移除的题目
+        const orphanIds = existingQs.map(q => q.id).filter(id => !keptIds.has(id));
+        if (orphanIds.length > 0) {
+            hasChanges = true;
+            await db.runAsync(`DELETE FROM questions WHERE id IN (${orphanIds.map(() => '?').join(',')})`, ...orphanIds);
+        }
+
+        return hasChanges;
     },
 
     async _saveBanks(subscriptionId: number, banks: RemoteBank[], isFallback: boolean = false, verbose: boolean = false) {
@@ -732,80 +758,14 @@ export const SubscriptionService = {
                     bankId = result.lastInsertRowId;
                 }
 
+                // 使用辅助函数处理题目同步
+                const questionsChanged = await this._syncQuestionsForBank(db, bankId, bank.questions);
 
-                // --- 开始处理题目增量更新 ---
-                // Incremental Update for questions to preserve IDs (and thus progress/mastery)
-                const existingQs: any[] = await db.getAllAsync('SELECT id, content, type, options, correct_answer, explanation FROM questions WHERE bank_id = ?', bankId);
-                const contentToIdMap = new Map<string, any[]>();
-                existingQs.forEach(q => {
-                    if (!contentToIdMap.has(q.content)) {
-                        contentToIdMap.set(q.content, []);
-                    }
-                    contentToIdMap.get(q.content)?.push(q);
-                });
-
-                const keptIds = new Set<number>();
-                let questionsChanged = false;
-
-                for (const q of bank.questions) {
-                    // 跳过无效题目
-                    if (!q || !q.content) {
-                        console.warn('跳过无效题目对象');
-                        continue;
-                    }
-
-                    let optionsStr = q.options;
-                    if (typeof q.options !== 'string') {
-                        optionsStr = JSON.stringify(q.options || {});
-                    }
-
-                    const match = contentToIdMap.get(q.content);
-                    const existingQ = match && match.length > 0 ? match.shift() : null;
-
-                    if (existingQ) {
-                        // 检查内容是否有变化
-                        if (existingQ.type !== q.type ||
-                            existingQ.options !== optionsStr ||
-                            existingQ.correct_answer !== q.correct_answer ||
-                            existingQ.explanation !== (q.explanation || '')) {
-                            questionsChanged = true;
-                        }
-
-                        await db.runAsync(
-                            `UPDATE questions SET type = ?, options = ?, correct_answer = ?, explanation = ? 
-                         WHERE id = ?`,
-                            q.type, optionsStr, q.correct_answer || '', q.explanation || '', existingQ.id
-                        );
-                        keptIds.add(existingQ.id);
-                    } else {
-                        // 新题目
-                        questionsChanged = true;
-                        await db.runAsync(
-                            `INSERT INTO questions (bank_id, type, content, options, correct_answer, explanation)
-                         VALUES (?, ?, ?, ?, ?, ?)`,
-                            bankId, q.type, q.content, optionsStr, q.correct_answer, q.explanation || ''
-                        );
-                    }
-                }
-
-                // Delete questions removed from the bank
-                const allIds = existingQs.map(q => q.id);
-                const orphanIds = allIds.filter(id => !keptIds.has(id));
-                if (orphanIds.length > 0) {
-                    questionsChanged = true;
-                    const placeholders = orphanIds.map(() => '?').join(',');
-                    await db.runAsync(
-                        `DELETE FROM questions WHERE id IN (${placeholders})`,
-                        ...orphanIds
-                    );
-                }
-
-                // 如果题目层发生了变化，更新题库的 description 时间戳 (如果还没更新的话)
+                // 如果题目层发生了变化，更新题库的时间戳
                 if (questionsChanged && !hasChanges) {
-                    const syncTime = new Date().toISOString();
                     await db.runAsync(
                         'UPDATE question_banks SET description = ? WHERE id = ?',
-                        syncTime, bankId
+                        new Date().toISOString(), bankId
                     );
                 }
             } // end for bank of banks

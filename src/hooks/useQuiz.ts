@@ -338,36 +338,41 @@ VALUES(?, ?, ?, ?, ?)`,
         }
     };
 
+    // 答案检查辅助函数
+    const checkMultiAnswer = (answer: any, correctAnswer: string) => {
+        const selectedArr = (Array.isArray(answer) ? answer : []).slice().sort();
+        const correctArr = correctAnswer.split('').slice().sort();
+        return JSON.stringify(selectedArr) === JSON.stringify(correctArr);
+    };
+
+    const normalizeTrueFalse = (val: any) => {
+        if (val === null || val === undefined) return '';
+        const s = val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toUpperCase();
+        if (['TRUE', 'T', '1', '正确', '对'].includes(s) || val === true) return 'T';
+        if (['FALSE', 'F', '0', '错误', '错'].includes(s) || val === false) return 'F';
+        return s;
+    };
+
+    const validateAnswer = (type: string, answer: any, correctAnswer: string): boolean => {
+        if (!answer && type !== 'fill' && type !== 'short') return false;
+
+        switch (type) {
+            case 'multi':
+                return checkMultiAnswer(answer, correctAnswer);
+            case 'true_false':
+                return normalizeTrueFalse(answer) === normalizeTrueFalse(correctAnswer);
+            default:
+                return answer?.toString().trim().toUpperCase() === correctAnswer?.toString().trim().toUpperCase();
+        }
+    };
+
     const checkAnswerInternal = useCallback(async (index: number, answer: any, manualCorrectness?: boolean) => {
         const currentQuestion = questions[index];
         if (!currentQuestion) return;
 
-        let correct = false;
-
-        if (typeof manualCorrectness === 'boolean') {
-            correct = manualCorrectness;
-        } else {
-            if (!answer && currentQuestion.type !== 'fill' && currentQuestion.type !== 'short') {
-                correct = false;
-            } else if (currentQuestion.type === 'multi') {
-                const selectedArr = (Array.isArray(answer) ? answer : []).slice().sort();
-                const correctArr = currentQuestion.correct_answer.split('').slice().sort();
-                correct = JSON.stringify(selectedArr) === JSON.stringify(correctArr);
-            } else if (currentQuestion.type === 'true_false') {
-                const normalize = (val: any) => {
-                    if (val === null || val === undefined) return '';
-                    const s = val.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toUpperCase();
-                    if (s === 'TRUE' || s === 'T' || s === '1' || s === '正确' || s === '对' || val === true) return 'T';
-                    if (s === 'FALSE' || s === 'F' || s === '0' || s === '错误' || s === '错' || val === false) return 'F';
-                    return s;
-                };
-                correct = normalize(answer) === normalize(currentQuestion.correct_answer);
-            } else {
-                const normalizedSelected = answer?.toString().trim().toUpperCase();
-                const normalizedCorrect = currentQuestion.correct_answer?.toString().trim().toUpperCase();
-                correct = normalizedSelected === normalizedCorrect;
-            }
-        }
+        const correct = typeof manualCorrectness === 'boolean'
+            ? manualCorrectness
+            : validateAnswer(currentQuestion.type, answer, currentQuestion.correct_answer);
 
         // Update local status if it's the current question
         if (index === currentIndex) {
