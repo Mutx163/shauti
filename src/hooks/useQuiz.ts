@@ -309,15 +309,19 @@ VALUES(?, ?, ?, ?, ?)`,
         if (typeof manualCorrectness === 'boolean') {
             correct = manualCorrectness;
         } else {
-            if (currentQuestion.type === 'multi') {
-                const selectedArr = (answer as string[] || []).slice().sort();
+            if (!answer && currentQuestion.type !== 'fill' && currentQuestion.type !== 'short') {
+                correct = false;
+            } else if (currentQuestion.type === 'multi') {
+                const selectedArr = (Array.isArray(answer) ? answer : []).slice().sort();
                 const correctArr = currentQuestion.correct_answer.split('').slice().sort();
                 correct = JSON.stringify(selectedArr) === JSON.stringify(correctArr);
             } else if (currentQuestion.type === 'true_false') {
-                correct = answer === currentQuestion.correct_answer;
+                // 确保布尔值或 T/F 字符串都能正确匹配
+                const normalizedAnswer = answer === true || answer === 'T' ? 'T' : (answer === false || answer === 'F' ? 'F' : '');
+                correct = normalizedAnswer === currentQuestion.correct_answer;
             } else {
                 const normalizedSelected = answer?.toString().trim().toUpperCase();
-                const normalizedCorrect = currentQuestion.correct_answer.trim().toUpperCase();
+                const normalizedCorrect = currentQuestion.correct_answer?.toString().trim().toUpperCase();
                 correct = normalizedSelected === normalizedCorrect;
             }
         }

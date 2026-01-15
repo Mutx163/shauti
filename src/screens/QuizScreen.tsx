@@ -547,11 +547,11 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
                                 styles.optionRow,
                                 {
                                     backgroundColor: highlight
-                                        ? (isRevealed ? (isCorrect ? theme.colors.surfaceVariant : theme.colors.surfaceVariant) : theme.colors.surfaceVariant)
+                                        ? (isRevealed ? (isCorrect ? theme.colors.primaryContainer : theme.colors.errorContainer) : theme.colors.secondaryContainer)
                                         : theme.colors.surface,
                                     borderColor: highlight
-                                        ? (isRevealed ? (isCorrect ? successColor : theme.colors.primary) : theme.colors.primary)
-                                        : 'transparent',
+                                        ? (isRevealed ? (isCorrect ? successColor : theme.colors.error) : theme.colors.primary)
+                                        : theme.colors.outlineVariant,
                                     borderWidth: highlight ? 2 : 1,
                                 }
                             ]}
@@ -560,7 +560,7 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
                                 <RadioButton
                                     value={key}
                                     status={highlight ? 'checked' : 'unchecked'}
-                                    color={isRevealed && isCorrect ? successColor : undefined}
+                                    color={isRevealed && isCorrect ? successColor : (highlight && isRevealed ? theme.colors.error : undefined)}
                                 />
                             </View>
                             <View style={styles.optionContent}>
@@ -568,7 +568,7 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
                                     content={isBool ? value : `${key}. ${value}`}
                                     fontSize={16}
                                     color={highlight
-                                        ? (isRevealed ? (isCorrect ? theme.colors.onSurface : theme.colors.onSurfaceVariant) : theme.colors.onSurfaceVariant)
+                                        ? (isRevealed ? (isCorrect ? theme.colors.onPrimaryContainer : theme.colors.onErrorContainer) : theme.colors.onSecondaryContainer)
                                         : theme.colors.onSurface}
                                 />
                             </View>
@@ -587,7 +587,7 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
             if (currentSelected.includes(key)) {
                 setSelectedAnswer(currentSelected.filter(k => k !== key));
             } else {
-                setSelectedAnswer([...currentSelected, key]);
+                setSelectedAnswer([...currentSelected, key].sort());
             }
         };
 
@@ -612,11 +612,11 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
                                 styles.optionRow,
                                 {
                                     backgroundColor: highlight
-                                        ? (isRevealed ? (isCorrect ? theme.colors.surfaceVariant : theme.colors.surfaceVariant) : theme.colors.surfaceVariant)
+                                        ? (isRevealed ? (isCorrect ? theme.colors.primaryContainer : theme.colors.errorContainer) : theme.colors.secondaryContainer)
                                         : theme.colors.surface,
                                     borderColor: highlight
-                                        ? (isRevealed ? (isCorrect ? successColor : theme.colors.primary) : theme.colors.primary)
-                                        : 'transparent',
+                                        ? (isRevealed ? (isCorrect ? successColor : theme.colors.error) : theme.colors.primary)
+                                        : theme.colors.outlineVariant,
                                     borderWidth: highlight ? 2 : 1,
                                 }
                             ]}
@@ -624,7 +624,7 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
                             <View pointerEvents="none">
                                 <Checkbox
                                     status={highlight ? 'checked' : 'unchecked'}
-                                    color={isRevealed && isCorrect ? successColor : undefined}
+                                    color={isRevealed && isCorrect ? successColor : (highlight && isRevealed ? theme.colors.error : undefined)}
                                 />
                             </View>
                             <View style={styles.optionContent}>
@@ -632,7 +632,7 @@ function OptionsRenderer({ question, options, selectedAnswer, setSelectedAnswer,
                                     content={`${key}. ${value}`}
                                     fontSize={16}
                                     color={highlight
-                                        ? (isRevealed ? (isCorrect ? theme.colors.onSurface : theme.colors.onSurfaceVariant) : theme.colors.onSurfaceVariant)
+                                        ? (isRevealed ? (isCorrect ? theme.colors.onPrimaryContainer : theme.colors.onErrorContainer) : theme.colors.onSecondaryContainer)
                                         : theme.colors.onSurface}
                                 />
                             </View>
