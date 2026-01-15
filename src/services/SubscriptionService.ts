@@ -400,69 +400,51 @@ export const SubscriptionService = {
      * 同步全球官方/默认题库清单
      * @param force 是否强制跳过冷却期与缓存 (通常用于下拉刷新)
      */
+    /**
+     * 处理官方订阅列表的同步到数据库
+     */
+    async _processOfficialSubscriptions(db: any, subs: { url: string; name: string }[]) {
+        const existingSubs: any[] = await db.getAllAsync('SELECT url FROM subscriptions');
+        const existingUrlSet = new Set(existingSubs.map(s => s.url));
+
+        for (const subItem of subs) {
+            try {
+                if (!existingUrlSet.has(subItem.url)) {
+                    await this.addSubscription(subItem.url, subItem.name, 1);
+                } else {
+                    await db.runAsync('UPDATE subscriptions SET is_official = 1 WHERE url = ?', subItem.url);
+                }
+            } catch (subErr) { /* Skip single error */ }
+        }
+    },
+
     async syncGlobalSubscriptions(force: boolean = false) {
         if (!OFFICIAL_GIST_URL || OFFICIAL_GIST_URL.includes('username')) return;
+        if (isSyncInProgress) return;
 
-        // 1. 排他锁检查
-        if (isSyncInProgress) {
-            return;
-        }
-
-        // 2. 冷却期检查 (静默模式下)
         const now = Date.now();
-        if (!force && (now - lastGlobalSyncTime < GLOBAL_SYNC_COOLDOWN)) {
-            // 静默跳过，无日志干扰
-            return;
-        }
+        if (!force && (now - lastGlobalSyncTime < GLOBAL_SYNC_COOLDOWN)) return;
 
         notifySyncStatus(true);
-        // 开启新任务前，清空失效黑名单
         if (force) failedMirrors.clear();
 
         try {
-
             let config: any = null;
-            let sourceFile = 'unknown';
-
-            // 构造带随机参数的缓存击穿 URL
             const getBustedUrl = (url: string) => force ? `${url}${url.includes('?') ? '&' : '?'}t=${now}` : url;
 
-            // 尝试获取 Gist 配置
             const gistMatch = OFFICIAL_GIST_URL.match(/gist\.github\.com\/([^\/]+)\/([^\/]+)/);
             if (gistMatch) {
                 const [, gistUser, gistId] = gistMatch;
-
-                // 1. 优先尝试 API
                 try {
                     config = await fetchGistConfigViaApi(gistId, getBustedUrl, force);
-                } catch (e) {
-                    console.warn('[GlobalSync] Gist API 请求失败');
-                }
-
-                // 2. API 失败则降级到 Raw URL
-                if (!config) {
-                    config = await fetchGistConfigViaRaw(gistUser, gistId, getBustedUrl, force);
-                }
+                } catch (e) { /* ignore api fail */ }
+                if (!config) config = await fetchGistConfigViaRaw(gistUser, gistId, getBustedUrl, force);
             }
 
             if (!config) throw new Error('未能加载配置');
-
             const subs: { url: string; name: string }[] = config.official_subscriptions || [];
-            if (subs.length === 0) return;
-
-            const db = getDB();
-            const existingSubs: any[] = await db.getAllAsync('SELECT url FROM subscriptions');
-            const existingUrlSet = new Set(existingSubs.map(s => s.url));
-
-            for (const subItem of subs) {
-                try {
-                    if (!existingUrlSet.has(subItem.url)) {
-                        await this.addSubscription(subItem.url, subItem.name, 1);
-                    } else {
-                        await db.runAsync('UPDATE subscriptions SET is_official = 1 WHERE url = ?', subItem.url);
-                        // 无需在这里强制 syncSubscription，由 autoSyncAll 统一处理以复用锁
-                    }
-                } catch (subErr) { }
+            if (subs.length > 0) {
+                await this._processOfficialSubscriptions(getDB(), subs);
             }
 
             lastGlobalSyncTime = now;
@@ -610,13 +592,42 @@ export const SubscriptionService = {
      * 同步单个题库的题目（增量更新以保留 ID 和进度）
      * @returns 是否有变化
      */
+    /**
+     * 处理单条题目的更新或插入
+     */
+    async _processQuestionUpdate(db: any, bankId: number, q: RemoteQuestion, existingQ: any): Promise<boolean> {
+        const optionsStr = typeof q.options === 'string' ? q.options : JSON.stringify(q.options || {});
+        let changed = false;
+
+        if (existingQ) {
+            changed = existingQ.type !== q.type || existingQ.options !== optionsStr ||
+                existingQ.correct_answer !== q.correct_answer ||
+                existingQ.explanation !== (q.explanation || '');
+
+            await db.runAsync(
+                `UPDATE questions SET type = ?, options = ?, correct_answer = ?, explanation = ? WHERE id = ?`,
+                q.type, optionsStr, q.correct_answer || '', q.explanation || '', existingQ.id
+            );
+        } else {
+            changed = true;
+            await db.runAsync(
+                `INSERT INTO questions (bank_id, type, content, options, correct_answer, explanation) VALUES (?, ?, ?, ?, ?, ?)`,
+                bankId, q.type, q.content, optionsStr, q.correct_answer, q.explanation || ''
+            );
+        }
+        return changed;
+    },
+
+    /**
+     * 同步单个题库的题目（增量更新以保留 ID 和进度）
+     * @returns 是否有变化
+     */
     async _syncQuestionsForBank(db: any, bankId: number, questions: RemoteQuestion[]): Promise<boolean> {
         const existingQs: any[] = await db.getAllAsync(
             'SELECT id, content, type, options, correct_answer, explanation FROM questions WHERE bank_id = ?',
             bankId
         );
 
-        // 建立 content -> questions 映射
         const contentToIdMap = new Map<string, any[]>();
         existingQs.forEach(q => {
             if (!contentToIdMap.has(q.content)) contentToIdMap.set(q.content, []);
@@ -628,39 +639,18 @@ export const SubscriptionService = {
 
         for (const q of questions) {
             if (!q || !q.content) continue;
+            const existingQ = contentToIdMap.get(q.content)?.shift();
 
-            const optionsStr = typeof q.options === 'string' ? q.options : JSON.stringify(q.options || {});
-            const match = contentToIdMap.get(q.content);
-            const existingQ = match && match.length > 0 ? match.shift() : null;
-
-            if (existingQ) {
-                // 检查是否有变化
-                if (existingQ.type !== q.type || existingQ.options !== optionsStr ||
-                    existingQ.correct_answer !== q.correct_answer ||
-                    existingQ.explanation !== (q.explanation || '')) {
-                    hasChanges = true;
-                }
-                await db.runAsync(
-                    `UPDATE questions SET type = ?, options = ?, correct_answer = ?, explanation = ? WHERE id = ?`,
-                    q.type, optionsStr, q.correct_answer || '', q.explanation || '', existingQ.id
-                );
-                keptIds.add(existingQ.id);
-            } else {
-                hasChanges = true;
-                await db.runAsync(
-                    `INSERT INTO questions (bank_id, type, content, options, correct_answer, explanation) VALUES (?, ?, ?, ?, ?, ?)`,
-                    bankId, q.type, q.content, optionsStr, q.correct_answer, q.explanation || ''
-                );
-            }
+            const changed = await this._processQuestionUpdate(db, bankId, q, existingQ);
+            if (changed) hasChanges = true;
+            if (existingQ) keptIds.add(existingQ.id);
         }
 
-        // 删除已移除的题目
         const orphanIds = existingQs.map(q => q.id).filter(id => !keptIds.has(id));
         if (orphanIds.length > 0) {
             hasChanges = true;
             await db.runAsync(`DELETE FROM questions WHERE id IN (${orphanIds.map(() => '?').join(',')})`, ...orphanIds);
         }
-
         return hasChanges;
     },
 
