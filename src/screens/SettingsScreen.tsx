@@ -66,34 +66,41 @@ export default function SettingsScreen() {
             <View style={styles.content}>
                 {/* 核心引擎：错题与复习策略 */}
                 <List.Section>
-                    <List.Subheader style={{ color: theme.colors.primary, fontWeight: 'bold' }}>核心引擎</List.Subheader>
-                    <Card style={[styles.card, { borderRadius: 16 }]} mode="elevated">
+                    <List.Subheader style={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 }}>核心引擎</List.Subheader>
+                    <Card style={styles.card} mode="outlined">
                         <List.Item
                             title="错题管理"
+                            titleStyle={{ fontWeight: '600' }}
                             description={`当前积压：${mistakeCount} 题`}
-                            left={props => <List.Icon {...props} icon="shield-alert-outline" color={theme.colors.error} />}
+                            left={props => <View style={{ backgroundColor: '#FFF5F5', padding: 8, borderRadius: 10, alignSelf: 'center', marginLeft: 12 }}>
+                                <List.Icon {...props} icon="shield-alert-outline" color="#FF3B30" style={{ margin: 0 }} />
+                            </View>}
                             right={() => (
                                 <Button
                                     mode="contained"
                                     onPress={() => navigation.navigate('Quiz', { mode: 'mistake' })}
                                     disabled={mistakeCount === 0}
-                                    style={{ alignSelf: 'center' }}
-                                    labelStyle={{ fontSize: 12 }}
+                                    style={{ alignSelf: 'center', marginRight: 8, borderRadius: 8 }}
+                                    labelStyle={{ fontSize: 12, fontWeight: 'bold' }}
+                                    compact
                                 >
                                     立即处理
                                 </Button>
                             )}
                         />
-                        <Divider horizontalInset />
+                        <Divider horizontalInset style={{ backgroundColor: '#F2F2F7' }} />
                         <List.Item
                             title="自动出库策略"
+                            titleStyle={{ fontWeight: '600' }}
                             description="答对后自动从错题本移除"
-                            left={props => <List.Icon {...props} icon="auto-fix" color={theme.colors.primary} />}
+                            left={props => <View style={{ backgroundColor: theme.colors.primary + '10', padding: 8, borderRadius: 10, alignSelf: 'center', marginLeft: 12 }}>
+                                <List.Icon {...props} icon="auto-fix" color={theme.colors.primary} style={{ margin: 0 }} />
+                            </View>}
                             right={() => (
                                 <Switch
                                     value={autoRemoveMistake}
                                     onValueChange={handleAutoRemoveChange}
-                                    style={{ transform: [{ scale: 0.8 }] }}
+                                    style={{ transform: [{ scale: 0.85 }] }}
                                 />
                             )}
                         />
@@ -102,18 +109,22 @@ export default function SettingsScreen() {
 
                 {/* 内容获取：订阅系统 */}
                 <List.Section>
-                    <List.Subheader style={{ color: theme.colors.primary, fontWeight: 'bold' }}>内容获取</List.Subheader>
-                    <Card style={[styles.card, { borderRadius: 16 }]} mode="elevated">
+                    <List.Subheader style={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 }}>内容获取</List.Subheader>
+                    <Card style={styles.card} mode="outlined">
                         <List.Item
                             title="在线题库订阅"
+                            titleStyle={{ fontWeight: '600' }}
                             description="自动同步云端最新题库资源"
-                            left={props => <List.Icon {...props} icon="rss-box" color={theme.colors.secondary} />}
+                            left={props => <View style={{ backgroundColor: theme.colors.secondary + '10', padding: 8, borderRadius: 10, alignSelf: 'center', marginLeft: 12 }}>
+                                <List.Icon {...props} icon="rss-box" color={theme.colors.secondary} style={{ margin: 0 }} />
+                            </View>}
                             right={() => (
                                 <Button
                                     mode="outlined"
                                     onPress={() => navigation.navigate('AddBank', { screen: 'OnlineSubscription' })}
-                                    style={{ alignSelf: 'center' }}
-                                    labelStyle={{ fontSize: 12 }}
+                                    style={{ alignSelf: 'center', marginRight: 8, borderRadius: 8, borderColor: '#E5E5EA' }}
+                                    labelStyle={{ fontSize: 12, fontWeight: 'bold' }}
+                                    compact
                                 >
                                     管理
                                 </Button>
@@ -124,45 +135,54 @@ export default function SettingsScreen() {
 
                 {/* 交互体验：个性化定制 */}
                 <List.Section>
-                    <List.Subheader style={{ color: theme.colors.primary, fontWeight: 'bold' }}>交互体验</List.Subheader>
-                    <Card style={[styles.card, { borderRadius: 16 }]} mode="elevated">
+                    <List.Subheader style={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 }}>交互体验</List.Subheader>
+                    <Card style={styles.card} mode="outlined">
                         <List.Item
                             title="显示模式"
+                            titleStyle={{ fontWeight: '600' }}
                             description={
-                                themeMode === 'system' ? '智能跟随系统' : 
-                                themeMode === 'light' ? '明亮模式' : 
-                                themeMode === 'dark' ? '深邃模式' : '舒适护眼模式'
+                                themeMode === 'system' ? '智能跟随系统' :
+                                    themeMode === 'light' ? '明亮模式' :
+                                        themeMode === 'dark' ? '深邃模式' : '舒适护眼模式'
                             }
-                            left={props => <List.Icon {...props} icon="palette-outline" color={theme.colors.tertiary} />}
+                            left={props => <View style={{ backgroundColor: theme.colors.tertiary + '10', padding: 8, borderRadius: 10, alignSelf: 'center', marginLeft: 12 }}>
+                                <List.Icon {...props} icon="palette-outline" color={theme.colors.tertiary} style={{ margin: 0 }} />
+                            </View>}
                             onPress={() => setShowThemeModal(true)}
-                            right={props => <List.Icon {...props} icon="chevron-right" />}
+                            right={props => <List.Icon {...props} icon="chevron-right" color="#C7C7CC" />}
                         />
-                        <Divider horizontalInset />
+                        <Divider horizontalInset style={{ backgroundColor: '#F2F2F7' }} />
                         <List.Item
                             title="全局主题色"
+                            titleStyle={{ fontWeight: '600' }}
                             description="自定义视觉基调"
-                            left={props => <List.Icon {...props} icon="format-color-fill" color={seedColor} />}
+                            left={props => <View style={{ backgroundColor: seedColor + '15', padding: 8, borderRadius: 10, alignSelf: 'center', marginLeft: 12 }}>
+                                <List.Icon {...props} icon="format-color-fill" color={seedColor} style={{ margin: 0 }} />
+                            </View>}
                             onPress={() => setShowColorModal(true)}
                             right={() => (
-                                <View style={{ 
-                                    width: 20, 
-                                    height: 20, 
-                                    borderRadius: 10, 
+                                <View style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderRadius: 9,
                                     backgroundColor: seedColor,
                                     alignSelf: 'center',
-                                    marginRight: 8,
+                                    marginRight: 12,
                                     borderWidth: 1,
-                                    borderColor: theme.colors.outlineVariant
+                                    borderColor: 'rgba(0,0,0,0.05)'
                                 }} />
                             )}
                         />
-                        <Divider horizontalInset />
+                        <Divider horizontalInset style={{ backgroundColor: '#F2F2F7' }} />
                         <List.Item
                             title="自动化流程"
-                            description={`当前状态：${skipModes.find(m => m.value === autoSkipMode)?.label}`}
-                            left={props => <List.Icon {...props} icon="robot-outline" color={theme.colors.primary} />}
+                            titleStyle={{ fontWeight: '600' }}
+                            description={`${skipModes.find(m => m.value === autoSkipMode)?.label}`}
+                            left={props => <View style={{ backgroundColor: theme.colors.primary + '10', padding: 8, borderRadius: 10, alignSelf: 'center', marginLeft: 12 }}>
+                                <List.Icon {...props} icon="robot-outline" color={theme.colors.primary} style={{ margin: 0 }} />
+                            </View>}
                             onPress={() => setShowSkipModal(true)}
-                            right={props => <List.Icon {...props} icon="chevron-right" />}
+                            right={props => <List.Icon {...props} icon="chevron-right" color="#C7C7CC" />}
                         />
                     </Card>
                 </List.Section>
@@ -285,16 +305,19 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    content: { padding: 16 },
-    card: { marginBottom: 16, borderRadius: 12 },
-    statsGrid: { flexDirection: 'row', justifyContent: 'space-around' },
-    statItem: { alignItems: 'center' },
+    content: { padding: 8, paddingHorizontal: 12 },
+    card: {
+        borderRadius: 20,
+        backgroundColor: '#FFFFFF',
+        borderColor: '#E5E5EA',
+        overflow: 'hidden',
+    },
     radioItem: { paddingVertical: 4 },
-    settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     modalContent: {
-        margin: 20,
+        margin: 24,
         padding: 24,
-        borderRadius: 28, // Material 3 uses larger border radius for dialogues
-        minWidth: 280,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: '#E5E5EA',
     },
 });

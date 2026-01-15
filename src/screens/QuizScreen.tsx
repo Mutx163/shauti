@@ -462,8 +462,8 @@ const QuestionItem = React.memo(({
 
     return (
         <View style={styles.scrollItem}>
-            <Card style={[styles.card, viewMode === 'scroll' && { marginHorizontal: 4 }]} mode="elevated">
-                <Card.Content style={{ paddingVertical: 20 }}>
+            <Card style={[styles.card, viewMode === 'scroll' && { marginHorizontal: 4 }]} mode="outlined">
+                <Card.Content style={{ paddingVertical: 18 }}>
                     <View style={styles.questionTextContainer}>
                         <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -869,22 +869,24 @@ function FooterControl({
                             {isSubjective ? (
                                 isRevealed ? (
                                     // 自评模式
-                                    <View style={{ flex: 1, flexDirection: 'row', gap: 8 }}>
+                                    <View style={{ flex: 3, flexDirection: 'row', gap: 6 }}>
                                         <Button
                                             mode="contained"
                                             onPress={() => onSelfJudge(false)}
                                             style={[styles.masteryButton, { backgroundColor: theme.colors.error }]}
                                             contentStyle={{ height: 44 }}
+                                            compact
                                         >
-                                            我答错了
+                                            答错了
                                         </Button>
                                         <Button
                                             mode="contained"
                                             onPress={() => onSelfJudge(true)}
                                             style={[styles.masteryButton, { backgroundColor: successColor }]}
                                             contentStyle={{ height: 44 }}
+                                            compact
                                         >
-                                            我答对了
+                                            答对了
                                         </Button>
                                     </View>
                                 ) : (
@@ -1104,7 +1106,7 @@ const styles = StyleSheet.create({
     scrollContent: { padding: 16, paddingBottom: 24 },
     scrollItem: { marginBottom: 16 },
     card: {
-        marginBottom: 16,
+        marginBottom: 12,
         borderRadius: 20,
         borderWidth: 1,
         borderColor: '#E5E5EA',
@@ -1113,14 +1115,14 @@ const styles = StyleSheet.create({
     questionTextContainer: { flexDirection: 'row', alignItems: 'flex-start' },
     typeBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
     typeBadge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
         alignSelf: 'flex-start',
-        marginBottom: 12,
+        marginBottom: 8,
         marginRight: 10,
     },
-    optionsContainer: { marginBottom: 24 },
+    optionsContainer: { marginBottom: 16 },
     flashcardContainer: { flex: 1, padding: 16, minHeight: 450 },
     flashcard: {
         flex: 1,
@@ -1134,7 +1136,7 @@ const styles = StyleSheet.create({
 
     // Result Feedback Styles
     tapTip: { textAlign: 'center', fontSize: 13, marginTop: 40, opacity: 0.5, letterSpacing: 1 },
-    masteryButton: { flex: 1, marginHorizontal: 8, borderRadius: 16, height: 52 },
+    masteryButton: { flex: 1, marginHorizontal: 4, borderRadius: 16, height: 52 },
     optionRow: {
         flexDirection: 'row',
         alignItems: 'center',

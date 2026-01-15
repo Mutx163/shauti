@@ -178,13 +178,13 @@ export default function StatsScreen() {
                         mode="outlined"
                         style={[
                             styles.chip,
-                            { 
+                            {
                                 backgroundColor: selectedBankId === null ? theme.colors.primary : theme.colors.surface,
                                 borderColor: selectedBankId === null ? theme.colors.primary : theme.colors.outline,
                             }
                         ]}
                         selectedColor={theme.colors.onPrimary}
-                        textStyle={{ 
+                        textStyle={{
                             color: selectedBankId === null ? theme.colors.onPrimary : theme.colors.onSurfaceVariant,
                             fontSize: 13
                         }}
@@ -200,14 +200,15 @@ export default function StatsScreen() {
                             mode="outlined"
                             style={[
                                 styles.chip,
-                                { 
-                                    backgroundColor: selectedBankId === bank.id ? theme.colors.primary : theme.colors.surface,
-                                    borderColor: selectedBankId === bank.id ? theme.colors.primary : theme.colors.outline,
+                                {
+                                    backgroundColor: selectedBankId === bank.id ? theme.colors.primary : '#FAFAFA',
+                                    borderColor: selectedBankId === bank.id ? theme.colors.primary : '#E5E5EA',
+                                    borderWidth: 1,
                                 }
                             ]}
                             selectedColor={theme.colors.onPrimary}
-                            textStyle={{ 
-                                color: selectedBankId === bank.id ? theme.colors.onPrimary : theme.colors.onSurfaceVariant,
+                            textStyle={{
+                                color: selectedBankId === bank.id ? theme.colors.onPrimary : '#48484A',
                                 fontSize: 13
                             }}
                             showSelectedCheck={false}
@@ -218,35 +219,35 @@ export default function StatsScreen() {
                 </ScrollView>
 
                 <View style={styles.grid}>
-                    <Card style={[styles.card, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="outlined">
+                    <Card style={[styles.card, { backgroundColor: '#FFFFFF' }]} mode="outlined">
                         <Card.Content>
-                            <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>{stats.totalAnswered}</Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>累计刷题</Text>
+                            <Text variant="titleLarge" style={{ color: '#1C1C1E', fontWeight: 'bold' }}>{stats.totalAnswered}</Text>
+                            <Text variant="bodySmall" style={{ color: '#8E8E93' }}>累计刷题</Text>
                         </Card.Content>
                     </Card>
-                    <Card style={[styles.card, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="outlined">
+                    <Card style={[styles.card, { backgroundColor: '#FFFFFF' }]} mode="outlined">
                         <Card.Content>
-                            <Text variant="titleLarge" style={{ color: stats.accuracy >= 60 ? (theme.colors.primary === '#006D3A' ? '#4CAF50' : theme.colors.primary) : theme.colors.error }}>
+                            <Text variant="titleLarge" style={{ color: stats.accuracy >= 60 ? (theme.colors.primary === '#006D3A' ? '#4CAF50' : theme.colors.primary) : theme.colors.error, fontWeight: 'bold' }}>
                                 {stats.accuracy}%
                             </Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>正确率</Text>
+                            <Text variant="bodySmall" style={{ color: '#8E8E93' }}>正确率</Text>
                         </Card.Content>
                     </Card>
-                    <Card style={[styles.card, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="outlined">
+                    <Card style={[styles.card, { backgroundColor: '#FFFFFF' }]} mode="outlined">
                         <Card.Content>
-                            <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>{stats.mistakeCount}</Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>错题数</Text>
+                            <Text variant="titleLarge" style={{ color: '#1C1C1E', fontWeight: 'bold' }}>{stats.mistakeCount}</Text>
+                            <Text variant="bodySmall" style={{ color: '#8E8E93' }}>错题数</Text>
                         </Card.Content>
                     </Card>
                 </View>
 
                 {/* Heatmap */}
-                <Card style={[styles.chartCard, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]} mode="outlined">
-                    <Card.Title 
-                        title="学习热力图" 
-                        subtitle="最近 90 天的学习频率" 
-                        titleStyle={{ color: theme.colors.onSurface }}
-                        subtitleStyle={{ color: theme.colors.onSurfaceVariant }}
+                <Card style={[styles.chartCard, { backgroundColor: '#FFFFFF' }]} mode="outlined">
+                    <Card.Title
+                        title="学习热力图"
+                        subtitle="最近 90 天的学习频率"
+                        titleStyle={{ color: '#1C1C1E', fontWeight: 'bold' }}
+                        subtitleStyle={{ color: '#8E8E93' }}
                     />
                     <Card.Content>
                         <StudyHeatmap data={heatmapData} theme={theme} />
@@ -335,10 +336,18 @@ function StudyHeatmap({ data, theme }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    content: { padding: 12 },
-    grid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-    card: { width: '32%', borderRadius: 12 },
-    chartCard: { marginBottom: 12, borderRadius: 12 },
+    content: { padding: 16 },
+    grid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+    card: {
+        width: '32%',
+        borderRadius: 16,
+        borderColor: '#E5E5EA',
+    },
+    chartCard: {
+        marginBottom: 16,
+        borderRadius: 20,
+        borderColor: '#E5E5EA',
+    },
     heatmapContainer: { paddingVertical: 8 },
     heatmapGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', justifyContent: 'flex-start' },
     heatmapSquare: { width: (SCREEN_WIDTH - 60) / 18, height: (SCREEN_WIDTH - 60) / 18, margin: 1, borderRadius: 2 },

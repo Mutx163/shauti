@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button, Card, Divider, useTheme, IconButton, Surface } from 'react-native-paper';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,17 +19,17 @@ export default function MockResultScreen() {
     const getScoreInfo = () => {
         const isEyeCare = theme.colors.primary === '#006D3A';
         if (percentage >= 90) return { label: '优秀', color: successColor, icon: 'medal-outline', msg: '才华横溢，实至名归！' };
-        if (percentage >= 80) return { 
-            label: '良好', 
-            color: isEyeCare ? '#81C784' : theme.colors.primary, 
-            icon: 'emoticon-happy-outline', 
-            msg: '表现出色，继续保持！' 
+        if (percentage >= 80) return {
+            label: '良好',
+            color: isEyeCare ? '#81C784' : theme.colors.primary,
+            icon: 'emoticon-happy-outline',
+            msg: '表现出色，继续保持！'
         };
-        if (percentage >= 60) return { 
-            label: '及格', 
-            color: isEyeCare ? '#FFD54F' : (theme.dark ? '#FFB74D' : '#F57C00'), 
-            icon: 'emoticon-neutral-outline', 
-            msg: '基础扎实，尚有空间。' 
+        if (percentage >= 60) return {
+            label: '及格',
+            color: isEyeCare ? '#FFD54F' : (theme.dark ? '#FFB74D' : '#F57C00'),
+            icon: 'emoticon-neutral-outline',
+            msg: '基础扎实，尚有空间。'
         };
         return { label: '待加强', color: theme.colors.error, icon: 'emoticon-sad-outline', msg: '不积跬步，无以至千里。' };
     };
@@ -57,8 +57,8 @@ export default function MockResultScreen() {
         <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
             <ScrollView contentContainerStyle={styles.content}>
                 {/* Header Score Section */}
-                <Surface style={[styles.headerSurface, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.shadow }]} elevation={2}>
-                    <IconButton icon={info.icon} iconColor={theme.colors.onPrimary} size={48} style={{ marginBottom: 0 }} />
+                <Surface style={[styles.headerSurface, { backgroundColor: theme.colors.primary }]} elevation={0}>
+                    <IconButton icon={info.icon} iconColor={theme.colors.onPrimary} size={42} style={{ marginBottom: -8 }} />
                     <Text variant="displayLarge" style={[styles.scoreText, { color: theme.colors.onPrimary }]}>{percentage}</Text>
                     <Text variant="titleMedium" style={{ color: theme.colors.onPrimary, opacity: 0.9, fontWeight: 'bold' }}>模拟考试：{info.label}</Text>
                     <Text variant="bodySmall" style={{ color: theme.colors.onPrimary, opacity: 0.7, marginTop: 4 }}>{info.msg}</Text>
@@ -66,16 +66,16 @@ export default function MockResultScreen() {
 
                 {/* Stats Grid */}
                 <View style={styles.statsGrid}>
-                    <Card style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, shadowColor: theme.colors.shadow }]} mode="contained">
+                    <Card style={[styles.statCard, { backgroundColor: '#FFFFFF', borderColor: '#E5E5EA' }]} mode="outlined">
                         <Card.Content style={styles.statContent}>
                             <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.primary }}>{score}/{total}</Text>
-                            <Text variant="labelSmall" style={{ opacity: 0.6, color: theme.colors.onSurfaceVariant }}>答对题目</Text>
+                            <Text variant="labelSmall" style={{ opacity: 0.6, color: '#8E8E93' }}>答对题目</Text>
                         </Card.Content>
                     </Card>
-                    <Card style={[styles.statCard, { backgroundColor: theme.colors.surfaceVariant, shadowColor: theme.colors.shadow }]} mode="contained">
+                    <Card style={[styles.statCard, { backgroundColor: '#FFFFFF', borderColor: '#E5E5EA' }]} mode="outlined">
                         <Card.Content style={styles.statContent}>
-                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurface }}>{formatTime(duration)}</Text>
-                            <Text variant="labelSmall" style={{ opacity: 0.6, color: theme.colors.onSurfaceVariant }}>答题耗时</Text>
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', color: '#1C1C1E' }}>{formatTime(duration)}</Text>
+                            <Text variant="labelSmall" style={{ opacity: 0.6, color: '#8E8E93' }}>答题耗时</Text>
                         </Card.Content>
                     </Card>
                 </View>
@@ -90,31 +90,47 @@ export default function MockResultScreen() {
                         </View>
 
                         {wrongQuestions.map((item: any, index: number) => (
-                            <Card key={index} style={[styles.wrongCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant, shadowColor: theme.colors.shadow }]} mode="outlined">
-                                <Card.Content>
-                                    <View style={[styles.questionIdRow, { borderBottomColor: theme.colors.outlineVariant }]}>
-                                        <Text variant="labelMedium" style={{ color: theme.colors.error }}>错题 #{index + 1}</Text>
-                                        <Text variant="labelSmall" style={{ opacity: 0.5, color: theme.colors.onSurfaceVariant }}>{item.question.type === 'single' ? '单选题' : '多选题'}</Text>
-                                    </View>
-                                    <View style={{ marginVertical: 12 }}>
-                                        <MathText content={item.question.content} color={theme.colors.onSurface} />
+                            <Card key={index} style={styles.wrongCard} mode="outlined">
+                                <Card.Content style={{ padding: 16 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 }}>
+                                        <View style={[styles.miniBadge, { backgroundColor: '#FFF5F5' }]}>
+                                            <Text style={{ color: '#FF3B30', fontSize: 11, fontWeight: 'bold' }}>#{index + 1}</Text>
+                                        </View>
+                                        <Text variant="labelSmall" style={{ color: '#8E8E93', marginLeft: 8, fontWeight: '600', marginTop: 1 }}>
+                                            {item.question.type === 'single' ? '单选题' : (item.question.type === 'multi' ? '多选题' : '题目')}
+                                        </Text>
                                     </View>
 
-                                    <View style={[styles.answerBox, { backgroundColor: theme.colors.surfaceVariant }]}>
-                                        <View style={styles.answerItem}>
-                                            <Text variant="labelSmall" style={{ opacity: 0.6, color: theme.colors.onSurfaceVariant }}>您的回答</Text>
-                                            <Text style={{ color: theme.colors.error, fontWeight: 'bold' }}>{Array.isArray(item.userAnswer) ? item.userAnswer.join(', ') : (item.userAnswer || '未作答')}</Text>
+                                    <View style={{ paddingLeft: 4, marginBottom: 16 }}>
+                                        <MathText
+                                            content={item.question.content.length > 50 ? item.question.content.substring(0, 47) + '...' : item.question.content}
+                                            color="#1C1C1E"
+                                            fontSize={16}
+                                        />
+                                    </View>
+
+                                    <View style={styles.answerRowCompact}>
+                                        <View style={[styles.answerPill, { backgroundColor: '#F2F2F7' }]}>
+                                            <Text style={styles.pillLabel}>您的回答</Text>
+                                            <Text style={[styles.pillValue, { color: '#FF3B30' }]}>
+                                                {Array.isArray(item.userAnswer) ? item.userAnswer.join(', ') : (item.userAnswer || '未作答')}
+                                            </Text>
                                         </View>
-                                        <View style={[styles.answerItem, { borderLeftWidth: 1, borderColor: theme.colors.outlineVariant }]}>
-                                            <Text variant="labelSmall" style={{ opacity: 0.6, color: theme.colors.onSurfaceVariant }}>正确答案</Text>
-                                            <Text style={{ color: successColor, fontWeight: 'bold' }}>{item.question.correct_answer}</Text>
+                                        <View style={[styles.answerPill, { backgroundColor: theme.colors.primary + '10' }]}>
+                                            <Text style={[styles.pillLabel, { color: theme.colors.primary }]}>正确答案</Text>
+                                            <Text style={[styles.pillValue, { color: successColor }]}>{item.question.correct_answer}</Text>
                                         </View>
                                     </View>
 
                                     {item.question.explanation && (
-                                        <View style={[styles.explanationBox, { backgroundColor: theme.colors.surfaceVariant }]}>
-                                            <Text variant="labelSmall" style={{ fontWeight: 'bold', marginBottom: 4, color: theme.colors.onSurfaceVariant }}>解析：</Text>
-                                            <MathText content={item.question.explanation} color={theme.colors.onSurfaceVariant} />
+                                        <View style={styles.explanationSection}>
+                                            <View style={styles.explanationHeader}>
+                                                <IconButton icon="book-open-variant" size={14} style={{ margin: 0 }} iconColor="#8E8E93" />
+                                                <Text variant="labelSmall" style={{ fontWeight: 'bold', color: '#8E8E93', marginLeft: -4 }}>解析详情</Text>
+                                            </View>
+                                            <View style={{ paddingLeft: 4 }}>
+                                                <MathText content={item.question.explanation} color="#48484A" fontSize={14} />
+                                            </View>
                                         </View>
                                     )}
                                 </Card.Content>
@@ -160,52 +176,76 @@ const styles = StyleSheet.create({
     statsGrid: {
         flexDirection: 'row',
         gap: 12,
+        marginBottom: 12,
     },
     statCard: {
         flex: 1,
-        borderRadius: 16,
+        borderRadius: 20,
+        borderWidth: 1,
     },
     statContent: {
         alignItems: 'center',
-        paddingVertical: 12,
+        paddingVertical: 14,
     },
     sectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 16,
+        gap: 12,
     },
     sectionTitle: {
-        marginHorizontal: 16,
-        paddingHorizontal: 8,
-        opacity: 0.5,
-        fontWeight: 'bold',
+        fontWeight: '600',
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+        fontSize: 12,
     },
     wrongCard: {
         marginBottom: 16,
-        borderRadius: 16,
-        borderWidth: 1,
+        borderRadius: 20,
+        borderColor: '#E5E5EA',
+        backgroundColor: '#FFFFFF',
     },
-    questionIdRow: {
+    miniBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    answerRowCompact: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    answerPill: {
+        flex: 1,
+        minWidth: '45%',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 12,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderBottomWidth: 1,
-        paddingBottom: 8,
     },
-    answerBox: {
+    pillLabel: {
+        fontSize: 12,
+        opacity: 0.7,
+        color: '#8E8E93',
+    },
+    pillValue: {
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    explanationSection: {
+        marginTop: 16,
+        padding: 12,
+        borderRadius: 16,
+        backgroundColor: '#F8F8F8',
+        borderWidth: 1,
+        borderColor: '#F2F2F7',
+    },
+    explanationHeader: {
         flexDirection: 'row',
-        borderRadius: 12,
-        marginTop: 8,
-    },
-    answerItem: {
-        flex: 1,
-        padding: 12,
         alignItems: 'center',
-    },
-    explanationBox: {
-        marginTop: 12,
-        padding: 12,
-        borderRadius: 12,
+        marginBottom: 6,
     },
     perfectState: {
         alignItems: 'center',
@@ -213,7 +253,6 @@ const styles = StyleSheet.create({
     },
     exitButton: {
         marginTop: 32,
-        borderRadius: 12,
-        elevation: 2,
+        borderRadius: 16,
     },
 });

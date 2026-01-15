@@ -120,11 +120,11 @@ export default function ManualAddScreen() {
             <View style={styles.content}>
                 {!isExistingBank ? (
                     <View>
-                        <Card style={[styles.card, { shadowColor: theme.colors.shadow }]} mode="elevated">
+                        <Card style={[styles.card, { backgroundColor: '#FFFFFF' }]} mode="outlined">
                             <Card.Content>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                                    <IconButton icon="plus-box" iconColor={theme.colors.primary} />
-                                    <Text variant="titleMedium">创建新题库</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                                    <IconButton icon="plus-box" iconColor={theme.colors.primary} size={28} />
+                                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>创建新题库</Text>
                                 </View>
                                 <TextInput
                                     label="题库名称"
@@ -134,7 +134,7 @@ export default function ManualAddScreen() {
                                     placeholder="输入题库名称..."
                                     style={{ marginBottom: 16 }}
                                 />
-                                <Button mode="contained" onPress={handleCreateBank}>
+                                <Button mode="contained" onPress={handleCreateBank} style={{ borderRadius: 12 }}>
                                     确认创建并录入
                                 </Button>
                             </Card.Content>
@@ -142,26 +142,27 @@ export default function ManualAddScreen() {
 
                         <Divider style={{ marginVertical: 20 }} />
 
-                        <Card style={[styles.card, { shadowColor: theme.colors.shadow }]} mode="outlined" onPress={() => setShowBankPicker(true)}>
+                        <Card style={[styles.card, { backgroundColor: '#FFFFFF' }]} mode="outlined" onPress={() => setShowBankPicker(true)}>
                             <Card.Title
                                 title="选择已有题库"
+                                titleStyle={{ fontWeight: 'bold' }}
                                 subtitle="向现有的题库中追加题目"
-                                left={(props) => <Avatar.Icon {...props} icon="folder-outline" />}
+                                left={(props) => <Avatar.Icon {...props} icon="folder-outline" size={40} style={{ backgroundColor: theme.colors.primary + '15' }} color={theme.colors.primary} />}
                                 right={(props) => <IconButton {...props} icon="chevron-right" />}
                             />
                         </Card>
                     </View>
                 ) : (
                     <View>
-                        <View style={[styles.headerInfo, { backgroundColor: theme.colors.surfaceVariant + '40' }]}>
+                        <View style={[styles.headerInfo, { backgroundColor: '#FFFFFF', borderColor: '#E5E5EA', borderWidth: 1 }]}>
                             <View>
-                                <Text variant="titleMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>{bankName}</Text>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>当前题量：{count}</Text>
+                                <Text variant="titleMedium" style={{ color: '#1C1C1E', fontWeight: 'bold' }}>{bankName}</Text>
+                                <Text variant="bodySmall" style={{ color: '#8E8E93' }}>当前题量：{count}</Text>
                             </View>
-                            <Button mode="text" onPress={() => setIsExistingBank(false)}>更换</Button>
+                            <Button mode="text" onPress={() => setIsExistingBank(false)} textColor={theme.colors.primary}>更换</Button>
                         </View>
 
-                        <Card style={[styles.card, { shadowColor: theme.colors.shadow }]} mode="outlined">
+                        <Card style={[styles.card, { backgroundColor: '#FFFFFF' }]} mode="outlined">
                             <Card.Content>
                                 <Text variant="labelLarge" style={{ marginBottom: 8, opacity: 0.7, color: theme.colors.onSurface }}>题目类型</Text>
                                 <SegmentedButtons
@@ -187,9 +188,9 @@ export default function ManualAddScreen() {
                                 />
 
                                 {content.trim() !== '' && (
-                                    <View style={[styles.previewBox, { backgroundColor: theme.colors.surfaceVariant + '33', borderColor: theme.colors.outlineVariant }]}>
-                                        <Text variant="labelSmall" style={{ marginBottom: 4, color: theme.colors.outline }}>LaTeX 预览：</Text>
-                                        <MathText content={content} fontSize={16} color={theme.colors.onSurface} />
+                                    <View style={[styles.previewBox, { backgroundColor: '#F2F2F7', borderColor: '#E5E5EA' }]}>
+                                        <Text variant="labelSmall" style={{ marginBottom: 6, color: '#8E8E93', fontWeight: 'bold' }}>LaTeX 预览：</Text>
+                                        <MathText content={content} fontSize={16} color="#1C1C1E" />
                                     </View>
                                 )}
 
@@ -275,26 +276,32 @@ export default function ManualAddScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     content: { padding: 16 },
-    card: { borderRadius: 20, marginBottom: 16, overflow: 'hidden' },
+    card: {
+        borderRadius: 20,
+        marginBottom: 16,
+        overflow: 'hidden',
+        borderColor: '#E5E5EA',
+    },
     headerInfo: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 20,
-        paddingHorizontal: 8,
-        paddingVertical: 12,
-        borderRadius: 12
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderRadius: 16,
     },
     previewBox: {
         padding: 16,
-        borderRadius: 12,
+        borderRadius: 16,
         marginBottom: 20,
         borderWidth: 1,
-        borderStyle: 'dashed'
     },
     modalContent: {
         margin: 20,
         padding: 24,
-        borderRadius: 28,
+        borderRadius: 24,
+        borderColor: '#E5E5EA',
+        borderWidth: 1,
     }
 });

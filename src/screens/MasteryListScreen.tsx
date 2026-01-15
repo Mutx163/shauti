@@ -66,11 +66,11 @@ export default function MasteryListScreen() {
     };
 
     const isEyeCare = theme.colors.primary === '#006D3A';
-    
+
     // 获取掌握度颜色 - 使用更柔和、更具层次感的颜色系统
     const getMasteryColor = (level: number) => {
         if (level === 0) return theme.dark ? 'rgba(255,255,255,0.05)' : '#F5F5F5';
-        
+
         if (isEyeCare) {
             const EYE_CARE_COLORS = [
                 '#F5F5F5',
@@ -88,7 +88,7 @@ export default function MasteryListScreen() {
     const renderGridItem = ({ item, index }: { item: any, index: number }) => {
         const masteryLevel = Math.min(item.mastery_level || 0, 7);
         const bgColor = getMasteryColor(masteryLevel);
-        
+
         // 只有高等级才显示白色文字，否则显示主题文字色
         const textColor = masteryLevel >= 5 ? '#FFFFFF' : theme.colors.onSurface;
         const opacity = masteryLevel === 0 ? 0.4 : 1;
@@ -96,8 +96,8 @@ export default function MasteryListScreen() {
         return (
             <TouchableOpacity
                 style={[
-                    styles.gridBox, 
-                    { 
+                    styles.gridBox,
+                    {
                         backgroundColor: bgColor,
                     }
                 ]}
@@ -158,7 +158,7 @@ export default function MasteryListScreen() {
                     contentContainerStyle={[styles.gridContent, { paddingBottom: insets.bottom + 20 }]}
                     ListHeaderComponent={
                         <View style={styles.headerSection}>
-                            <Surface style={styles.statsSurface} elevation={1}>
+                            <Surface style={styles.statsSurface} elevation={0}>
                                 <View style={styles.dashboardHeader}>
                                     <View>
                                         <Text variant="headlineSmall" style={styles.dashboardTitle}>学习洞察</Text>
@@ -231,9 +231,9 @@ export default function MasteryListScreen() {
                                 </View>
                                 <IconButton icon="close" size={20} onPress={() => setModalVisible(false)} />
                             </View>
-                            
+
                             <Divider />
-                            
+
                             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
                                 <View style={styles.detailSection}>
                                     <View style={styles.sectionHeader}>
@@ -262,7 +262,7 @@ export default function MasteryListScreen() {
                                         <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: 'bold', marginBottom: 4 }}>正确答案</Text>
                                         <Text variant="titleLarge" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>{selectedQuestion.correct_answer}</Text>
                                     </View>
-                                    
+
                                     <View style={[styles.statItemMini, { backgroundColor: theme.colors.surfaceVariant + '50' }]}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>练习次数</Text>
                                         <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{selectedQuestion.attempt_count}</Text>
@@ -299,17 +299,21 @@ const styles = StyleSheet.create({
         width: GRID_SIZE,
         height: GRID_SIZE,
         margin: ITEM_MARGIN,
-        borderRadius: 8,
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.03)',
     },
     gridText: { fontSize: 13, fontWeight: '700' },
     headerSection: { marginBottom: 24 },
     statsSurface: {
         padding: 20,
-        borderRadius: 24,
-        backgroundColor: '#fff',
+        borderRadius: 20,
+        backgroundColor: '#FFFFFF',
         marginBottom: 24,
+        borderWidth: 1,
+        borderColor: '#E5E5EA',
     },
     dashboardHeader: {
         flexDirection: 'row',
@@ -318,8 +322,9 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     dashboardTitle: {
-        fontWeight: '900',
-        letterSpacing: -0.5,
+        fontWeight: 'bold',
+        letterSpacing: -0.6,
+        color: '#1C1C1E',
     },
     scoreContainer: {
         alignItems: 'flex-end',
@@ -390,9 +395,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     detailCard: {
-        borderRadius: 28,
+        borderRadius: 24,
         maxHeight: '85%',
         overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#E5E5EA',
     },
     modalHeader: {
         flexDirection: 'row',

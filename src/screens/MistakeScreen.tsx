@@ -109,37 +109,37 @@ export default function MistakeScreen() {
     const renderHeader = () => (
         <View style={{ marginBottom: 24 }}>
             <Card
-                style={{ 
-                    backgroundColor: theme.colors.primary, 
-                    marginBottom: 20, 
-                    borderRadius: 16,
-                    elevation: 4,
-                    shadowColor: theme.colors.shadow 
+                style={{
+                    backgroundColor: theme.colors.primary,
+                    marginBottom: 24,
+                    borderRadius: 24,
+                    borderWidth: 0,
+                    overflow: 'hidden',
                 }}
                 onPress={() => navigation.navigate('MockConfig')}
-                mode="elevated"
+                mode="contained"
             >
-                <Card.Content style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 20 }}>
-                    <View style={{ 
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)', 
-                        borderRadius: 12, 
+                <Card.Content style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16 }}>
+                    <View style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                        borderRadius: 12,
                         padding: 10,
-                        marginRight: 16 
+                        marginRight: 14
                     }}>
-                        <Avatar.Icon 
-                            size={32} 
-                            icon="clipboard-text-clock" 
-                            style={{ backgroundColor: 'transparent' }} 
-                            color="#FFFFFF" 
+                        <Avatar.Icon
+                            size={24}
+                            icon="clipboard-text-clock"
+                            style={{ backgroundColor: 'transparent' }}
+                            color="#FFFFFF"
                         />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text variant="titleLarge" style={{ color: '#FFFFFF', fontWeight: 'bold' }}>全真模拟考试</Text>
-                        <Text variant="bodySmall" style={{ color: 'rgba(255, 255, 255, 0.8)', marginTop: 2 }}>
-                            基于艾宾浩斯曲线 · 智能组卷
+                        <Text variant="titleMedium" style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>全真模拟考试</Text>
+                        <Text variant="bodySmall" style={{ color: 'rgba(255, 255, 255, 0.8)', marginTop: 1, fontSize: 11 }}>
+                            智能组卷 · 复刻真实考试场景
                         </Text>
                     </View>
-                    <IconButton icon="chevron-right" iconColor="#FFFFFF" />
+                    <IconButton icon="arrow-right-circle" iconColor="#FFFFFF" size={24} style={{ marginRight: -8 }} />
                 </Card.Content>
             </Card>
 
@@ -175,38 +175,31 @@ export default function MistakeScreen() {
                 renderItem={({ item }) => (
                     <Card
                         key={item.bankId}
-                        style={[
-                            styles.bankCard,
-                            {
-                                backgroundColor: theme.colors.surface,
-                                borderColor: theme.colors.outlineVariant,
-                                shadowColor: theme.colors.shadow,
-                            }
-                        ]}
-                        mode="elevated"
+                        style={styles.bankCard}
+                        mode="outlined"
                     >
                         <Card.Content style={{ padding: 16 }}>
-                            {/* 头部区域 - 圆角卡片 */}
-                            <View style={[styles.cardHeader, { backgroundColor: theme.colors.surfaceVariant }]}>
+                            {/* 头部：银行信息与操作 */}
+                            <View style={styles.bankHeaderRow}>
                                 <View style={{ flex: 1 }}>
-                                    <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.colors.onSurfaceVariant }}>
+                                    <Text variant="titleMedium" style={{ fontWeight: '800', color: '#1C1C1E', fontSize: 18 }}>
                                         {item.bankName}
                                     </Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-                                        <View style={[styles.badge, { backgroundColor: theme.colors.errorContainer }]}>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.error, fontWeight: 'bold' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                        <View style={[styles.pillBadge, { backgroundColor: '#FF3B30' + '15' }]}>
+                                            <Text style={{ color: '#FF3B30', fontSize: 11, fontWeight: 'bold' }}>
                                                 {item.mistakes.length} 道错题
                                             </Text>
                                         </View>
                                     </View>
                                 </View>
-                                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                     <IconButton
                                         icon="delete-outline"
-                                        size={22}
+                                        size={20}
                                         onPress={() => setClearBankDialog(item.bankId)}
-                                        iconColor={theme.colors.error}
-                                        style={{ margin: 0, backgroundColor: theme.colors.surface }}
+                                        iconColor="#FF3B30"
+                                        style={{ margin: 0 }}
                                     />
                                     <Button
                                         mode="contained"
@@ -214,38 +207,42 @@ export default function MistakeScreen() {
                                             mode: 'mistake',
                                             bankId: item.bankId,
                                             bankName: item.bankName,
-                                            reset: true // 强制重置进度，以便重新练习
+                                            reset: true
                                         })}
                                         icon="play"
                                         buttonColor={theme.colors.primary}
-                                        style={{ borderRadius: 20 }}
+                                        style={{ borderRadius: 10, height: 36 }}
+                                        labelStyle={{ fontSize: 13, fontWeight: 'bold', marginHorizontal: 8 }}
+                                        contentStyle={{ height: 36 }}
                                     >
-                                        开始复习
+                                        复习
                                     </Button>
                                 </View>
                             </View>
 
+                            <Divider style={{ marginVertical: 12, backgroundColor: '#F2F2F7' }} />
+
                             {/* 错题预览区域 */}
-                            <View style={{ marginTop: 16 }}>
-                                <Text variant="labelMedium" style={{ color: theme.colors.primary, marginBottom: 12, fontWeight: 'bold' }}>
-                                    📝 错题预览
-                                </Text>
+                            <View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                    <Text variant="labelSmall" style={{ color: '#8E8E93', fontWeight: 'bold', letterSpacing: 0.5 }}>错题预览</Text>
+                                </View>
                                 {item.mistakes.slice(0, 3).map((mistake, index) => (
-                                    <View key={mistake.id} style={styles.mistakePreview}>
-                                        <View style={[styles.indexBadge, { backgroundColor: theme.colors.secondaryContainer }]}>
-                                            <Text variant="labelSmall" style={{ color: theme.colors.onSecondaryContainer, fontWeight: 'bold' }}>
-                                                {index + 1}
-                                            </Text>
-                                        </View>
+                                    <View key={mistake.id} style={styles.mistakeItemCompact}>
+                                        <View style={styles.dotIndicator} />
                                         <View style={{ flex: 1 }}>
-                                            <MathText content={mistake.content} fontSize={14} color={theme.colors.onSurface} />
+                                            <MathText
+                                                content={mistake.content.length > 36 ? mistake.content.substring(0, 33) + '...' : mistake.content}
+                                                fontSize={14}
+                                                color="#48484A"
+                                            />
                                         </View>
                                     </View>
                                 ))}
                                 {item.mistakes.length > 3 && (
-                                    <View style={[styles.moreIndicator, { backgroundColor: theme.colors.surfaceVariant }]}>
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                            📚 还有 {item.mistakes.length - 3} 道错题等待复习
+                                    <View style={styles.moreFooter}>
+                                        <Text variant="labelSmall" style={{ color: '#8E8E93', fontWeight: '500' }}>
+                                            查看剩余 {item.mistakes.length - 3} 道题目...
                                         </Text>
                                     </View>
                                 )}
@@ -298,44 +295,37 @@ const styles = StyleSheet.create({
     emptyContainer: { justifyContent: 'center', alignItems: 'center' },
     bankCard: {
         marginBottom: 16,
-        borderRadius: 20,
-        borderWidth: 1,
-        elevation: 3,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        borderRadius: 24,
+        borderColor: '#E5E5EA',
+        backgroundColor: '#FFFFFF',
     },
-    cardHeader: {
+    bankHeaderRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 16,
-        borderRadius: 12,
     },
-    bankHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    badge: {
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
+    pillBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
     },
-    mistakePreview: {
+    mistakeItemCompact: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: 12,
-        gap: 10,
-    },
-    indexBadge: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
         alignItems: 'center',
-        justifyContent: 'center',
+        paddingVertical: 10,
+        gap: 12,
     },
-    previewItem: { flexDirection: 'row', marginTop: 8, gap: 8 },
-    moreIndicator: {
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
+    dotIndicator: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#FF3B30',
+        opacity: 0.3,
+    },
+    moreFooter: {
         marginTop: 4,
+        paddingTop: 8,
+        borderTopWidth: 0.5,
+        borderTopColor: '#F2F2F7',
     },
 });

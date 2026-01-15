@@ -59,6 +59,8 @@ function MainTabs() {
                     paddingBottom: insets.bottom > 0 ? insets.bottom - 10 : 0,
                     borderTopWidth: 0.5,
                     borderTopColor: colors.outlineVariant,
+                    elevation: 0,
+                    shadowOpacity: 0,
                 },
                 tabBarItemStyle: {
                     flexDirection: 'column',
@@ -178,47 +180,52 @@ export default function App() {
                     <PaperProvider theme={currentTheme}>
                         <StatusBar style={themeMode === 'dark' || (themeMode === 'system' && colorScheme === 'dark') ? 'light' : 'dark'} />
                         <NavigationContainer theme={navigationTheme}>
-                            <Stack.Navigator id="RootStack">
-                            <Stack.Screen
-                                name="Main"
-                                component={MainTabs}
-                                options={({ navigation, route }) => ({
-                                    headerTitle: getHeaderTitle(route),
-                                    headerRight: () => {
-                                        const routeName = getFocusedRouteNameFromRoute(route) ?? 'HomeTab';
-                                        if (routeName === 'HomeTab') {
-                                            return (
-                                                <View style={{ flexDirection: 'row' }}>
-                                                    <IconButton
-                                                        icon="magnify"
-                                                        onPress={() => navigation.navigate('Search')}
-                                                    />
-                                                    <IconButton
-                                                        icon="plus-circle-outline"
-                                                        onPress={() => navigation.navigate('AddBank')}
-                                                    />
-                                                </View>
-                                            );
+                            <Stack.Navigator
+                                id="RootStack"
+                                screenOptions={{
+                                    headerShadowVisible: false,
+                                }}
+                            >
+                                <Stack.Screen
+                                    name="Main"
+                                    component={MainTabs}
+                                    options={({ navigation, route }) => ({
+                                        headerTitle: getHeaderTitle(route),
+                                        headerRight: () => {
+                                            const routeName = getFocusedRouteNameFromRoute(route) ?? 'HomeTab';
+                                            if (routeName === 'HomeTab') {
+                                                return (
+                                                    <View style={{ flexDirection: 'row' }}>
+                                                        <IconButton
+                                                            icon="magnify"
+                                                            onPress={() => navigation.navigate('Search')}
+                                                        />
+                                                        <IconButton
+                                                            icon="plus-circle-outline"
+                                                            onPress={() => navigation.navigate('AddBank')}
+                                                        />
+                                                    </View>
+                                                );
+                                            }
+                                            return null;
                                         }
-                                        return null;
-                                    }
-                                })}
-                            />
-                            <Stack.Screen name="AddBank" component={AddBankScreen} options={{ title: '题库添加中心' }} />
-                            <Stack.Screen name="QuizConfig" component={QuizConfigScreen} options={{ title: '刷题设置' }} />
-                            <Stack.Screen name="Quiz" component={QuizScreen} options={{ title: '刷题' }} />
-                            <Stack.Screen name="MockConfig" component={MockConfigScreen} options={{ title: '模拟考试设置' }} />
-                            <Stack.Screen name="MockExam" component={MockExamScreen} options={{ title: '模拟考试', headerShown: false }} />
-                            <Stack.Screen name="MockResult" component={MockResultScreen} options={{ title: '考试结果', headerShown: false }} />
-                            <Stack.Screen name="Search" component={SearchScreen} options={{ title: '全局搜索' }} />
-                            <Stack.Screen name="ManualAdd" component={ManualAddScreen} options={{ title: '手动添加题目' }} />
-                            <Stack.Screen name="SrsReview" component={SrsReviewScreen} options={{ title: '今日复习' }} />
-                            <Stack.Screen name="MasteryList" component={MasteryListScreen} options={({ route }: any) => ({ title: route.params?.bankName || '掌握清单' })} />
-                        </Stack.Navigator>
-                    </NavigationContainer>
-                </PaperProvider>
-            </ThemeContext.Provider>
-        </SafeAreaProvider>
-    </GestureHandlerRootView>
-);
+                                    })}
+                                />
+                                <Stack.Screen name="AddBank" component={AddBankScreen} options={{ title: '题库添加中心' }} />
+                                <Stack.Screen name="QuizConfig" component={QuizConfigScreen} options={{ title: '刷题设置' }} />
+                                <Stack.Screen name="Quiz" component={QuizScreen} options={{ title: '刷题' }} />
+                                <Stack.Screen name="MockConfig" component={MockConfigScreen} options={{ title: '模拟考试设置' }} />
+                                <Stack.Screen name="MockExam" component={MockExamScreen} options={{ title: '模拟考试', headerShown: false }} />
+                                <Stack.Screen name="MockResult" component={MockResultScreen} options={{ title: '考试结果', headerShown: false }} />
+                                <Stack.Screen name="Search" component={SearchScreen} options={{ title: '全局搜索' }} />
+                                <Stack.Screen name="ManualAdd" component={ManualAddScreen} options={{ title: '手动添加题目' }} />
+                                <Stack.Screen name="SrsReview" component={SrsReviewScreen} options={{ title: '今日复习' }} />
+                                <Stack.Screen name="MasteryList" component={MasteryListScreen} options={({ route }: any) => ({ title: route.params?.bankName || '掌握清单' })} />
+                            </Stack.Navigator>
+                        </NavigationContainer>
+                    </PaperProvider>
+                </ThemeContext.Provider>
+            </SafeAreaProvider>
+        </GestureHandlerRootView>
+    );
 }

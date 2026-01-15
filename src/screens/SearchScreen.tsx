@@ -77,6 +77,10 @@ export default function SearchScreen() {
                     value={searchQuery}
                     autoFocus
                     style={styles.searchbar}
+                    mode="bar"
+                    elevation={0}
+                    placeholderTextColor="#8E8E93"
+                    iconColor={theme.colors.primary}
                 />
             </View>
 
@@ -102,18 +106,9 @@ export default function SearchScreen() {
                     }
                     renderItem={({ item }) => (
                         <Card
-                            style={[styles.card, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]}
+                            style={[styles.card, { backgroundColor: '#FFFFFF', borderColor: '#E5E5EA' }]}
                             mode="outlined"
                             onPress={() => {
-                                // Navigate to QuizScreen in "single question" mode or similar?
-                                // Currently QuizScreen takes bankId. Let's make a special "search" mode logic later?
-                                // Or better: Filter quiz by this specific question ID?
-                                // For now, let's just create a temporary bank of 1 result OR pass the single question content?
-                                // Actually user might want to jump to the context. Update QuizScreen to accept questionIds?
-                                // Let's make it simple: Pass [item] as pre-loaded questions to QuizScreen? 
-                                // QuizScreen logic needs adaptation.
-                                // ALTERNATIVE: Just Preview it here? NO, user wants to practice.
-                                // Let's try passing 'questionIds' param to QuizScreen.
                                 navigation.navigate('Quiz', {
                                     mode: 'custom',
                                     customQuestions: [item],
@@ -123,18 +118,13 @@ export default function SearchScreen() {
                             }}
                         >
                             <Card.Content>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                                    <Chip 
-                                mode="outlined"
-                                textStyle={{ fontSize: 10, height: 16, lineHeight: 16 }} 
-                                style={{ height: 24, backgroundColor: theme.colors.surface }} 
-                                compact
-                            >
-                                {getTypeLabel(item.type)}
-                            </Chip>
-                                    <Text variant="bodySmall" style={{ color: theme.colors.primary }}>{item.bank_name}</Text>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, alignItems: 'center' }}>
+                                    <View style={{ backgroundColor: theme.colors.primary + '10', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                        <Text style={{ fontSize: 11, fontWeight: 'bold', color: theme.colors.primary }}>{getTypeLabel(item.type)}</Text>
+                                    </View>
+                                    <Text variant="bodySmall" style={{ color: '#8E8E93', fontWeight: '600' }}>{item.bank_name}</Text>
                                 </View>
-                                <MathText content={item.content} fontSize={15} color={theme.colors.onSurface} />
+                                <MathText content={item.content} fontSize={16} color="#1C1C1E" />
                             </Card.Content>
                         </Card>
                     )}
@@ -146,8 +136,16 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { padding: 16, paddingBottom: 8 },
-    searchbar: { borderRadius: 12 },
-    center: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 50 },
-    card: { marginBottom: 12 },
+    header: { padding: 16, paddingBottom: 12 },
+    searchbar: {
+        borderRadius: 16,
+        backgroundColor: '#F2F2F7',
+        borderWidth: 1,
+        borderColor: '#E5E5EA',
+    },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 100 },
+    card: {
+        marginBottom: 16,
+        borderRadius: 16,
+    },
 });
