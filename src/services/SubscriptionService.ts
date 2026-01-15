@@ -338,6 +338,54 @@ const notifySyncStatus = (status: boolean) => {
     syncListeners.forEach(l => l(status));
 };
 
+// 通过 Gist API 获取配置
+const fetchGistConfigViaApi = async (gistId: string, getBustedUrl: (url: string) => string, force: boolean): Promise<any> => {
+    const apiUrl = getBustedUrl(`https://api.github.com/gists/${gistId}`);
+    const apiRes = await fetchWithTimeout(apiUrl, 5000);
+
+    if (apiRes.status === 403) {
+        console.warn('[GlobalSync] Gist API 限流 (403)，切换至 Raw URL 模式');
+        return null;
+    }
+
+    if (!apiRes.ok) return null;
+
+    const gistData = await apiRes.json();
+    const files: any[] = Object.values(gistData.files);
+    const configFile: any = gistData.files['manifest.json'] ||
+        files.find((f: any) => f.filename.endsWith('.json')) ||
+        files[0];
+
+    if (!configFile) return null;
+
+    const contentRes = await fetchWithRetry(getBustedUrl(configFile.raw_url), force);
+    const rawText = await contentRes.text();
+    return safeJsonParse(rawText);
+};
+
+// 通过 Raw URL 获取配置（降级方案）
+const fetchGistConfigViaRaw = async (gistUser: string, gistId: string, getBustedUrl: (url: string) => string, force: boolean): Promise<any> => {
+    const rawBase = `https://gist.githubusercontent.com/${gistUser}/${gistId}/raw`;
+    const tryUrls = [`${rawBase}/manifest.json`, rawBase];
+
+    for (const rawUrl of tryUrls) {
+        try {
+            const targetUrl = getBustedUrl(rawUrl);
+            if (force) console.log(`[GlobalSync] 尝试 Raw URL 降级: ${targetUrl}`);
+
+            const response = await fetchWithRetry(targetUrl, force);
+            if (!response.ok) continue;
+
+            const text = await response.text();
+            if (text.trim().startsWith('<')) continue; // 跳过 HTML 错误页
+
+            const config = safeJsonParse(text);
+            if (config) return config;
+        } catch (e) { /* continue */ }
+    }
+    return null;
+};
+
 export const SubscriptionService = {
     subscribe(listener: SyncListener) {
         syncListeners.add(listener);
@@ -379,67 +427,21 @@ export const SubscriptionService = {
             // 构造带随机参数的缓存击穿 URL
             const getBustedUrl = (url: string) => force ? `${url}${url.includes('?') ? '&' : '?'}t=${now}` : url;
 
-            // 1. 尝试 Gist API 智能识别 (带局部保护)
+            // 尝试获取 Gist 配置
             const gistMatch = OFFICIAL_GIST_URL.match(/gist\.github\.com\/([^\/]+)\/([^\/]+)/);
             if (gistMatch) {
-                const gistUser = gistMatch[1];
-                const gistId = gistMatch[2];
-                let apiSuccess = false;
+                const [, gistUser, gistId] = gistMatch;
 
+                // 1. 优先尝试 API
                 try {
-                    const apiUrl = getBustedUrl(`https://api.github.com/gists/${gistId}`);
-                    const apiRes = await fetchWithTimeout(apiUrl, 5000);
-
-                    if (apiRes.ok) {
-                        const gistData = await apiRes.json();
-                        const files: any[] = Object.values(gistData.files);
-                        const configFile: any = gistData.files['manifest.json'] ||
-                            files.find((f: any) => f.filename.endsWith('.json')) ||
-                            files[0];
-
-                        if (configFile) {
-                            sourceFile = configFile.filename;
-                            const contentRes = await fetchWithRetry(getBustedUrl(configFile.raw_url), force);
-                            const rawText = await contentRes.text();
-                            config = safeJsonParse(rawText);
-                            apiSuccess = true;
-                        }
-                    } else if (apiRes.status === 403) {
-                        console.warn('[GlobalSync] Gist API 限流 (403)，切换至 Raw URL 模式');
-                    }
-                } catch (apiErr: any) {
-                    console.warn('[GlobalSync] Gist API 请求失败:', apiErr);
+                    config = await fetchGistConfigViaApi(gistId, getBustedUrl, force);
+                } catch (e) {
+                    console.warn('[GlobalSync] Gist API 请求失败');
                 }
 
-                // 2. API 失败后的 Raw URL 降级策略
-                if (!apiSuccess && !config) {
-                    // 尝试构建直链: gist.githubusercontent.com/user/id/raw/manifest.json
-                    // 注意：如果不指定文件名，raw 可能会重定向到第一个文件，通常也是可行的
-                    const rawBase = `https://gist.githubusercontent.com/${gistUser}/${gistId}/raw`;
-                    const tryUrls = [
-                        `${rawBase}/manifest.json`, // 优先尝试标准命名
-                        rawBase                     // 兜底尝试默认文件
-                    ];
-
-                    for (const rawUrl of tryUrls) {
-                        try {
-                            const targetUrl = getBustedUrl(rawUrl);
-                            if (force) console.log(`[GlobalSync] 尝试 Raw URL 降级: ${targetUrl}`);
-
-                            const response = await fetchWithRetry(targetUrl, force);
-                            if (response.ok) {
-                                const text = await response.text();
-                                // 验证是否为 HTML (Gist 404 页或其他错误页)
-                                if (text.trim().startsWith('<')) continue;
-
-                                config = safeJsonParse(text);
-                                if (config) {
-                                    sourceFile = rawUrl.split('/').pop() || 'raw';
-                                    break;
-                                }
-                            }
-                        } catch (e) { /* continue */ }
-                    }
+                // 2. API 失败则降级到 Raw URL
+                if (!config) {
+                    config = await fetchGistConfigViaRaw(gistUser, gistId, getBustedUrl, force);
                 }
             }
 
@@ -662,6 +664,38 @@ export const SubscriptionService = {
         return hasChanges;
     },
 
+    /**
+     * 创建或更新单个题库，返回 { bankId, hasChanges }
+     */
+    async _upsertBank(db: any, subscriptionId: number, bank: RemoteBank): Promise<{ bankId: number; hasChanges: boolean }> {
+        const remoteId = bank.id || bank.name;
+        const existing: any = await db.getFirstAsync(
+            'SELECT id, name FROM question_banks WHERE subscription_id = ? AND remote_id = ?',
+            subscriptionId, remoteId
+        );
+
+        if (existing) {
+            const hasChanges = existing.name !== bank.name;
+            const existingCount: any = await db.getFirstAsync('SELECT COUNT(*) as count FROM questions WHERE bank_id = ?', existing.id);
+            const countChanged = existingCount.count !== bank.questions.length;
+
+            if (hasChanges || countChanged) {
+                await db.runAsync('UPDATE question_banks SET name = ?, description = ? WHERE id = ?',
+                    bank.name, new Date().toISOString(), existing.id);
+            } else {
+                await db.runAsync('UPDATE question_banks SET name = ? WHERE id = ?', bank.name, existing.id);
+            }
+            return { bankId: existing.id, hasChanges: hasChanges || countChanged };
+        }
+
+        // 新题库
+        const result: any = await db.runAsync(
+            'INSERT INTO question_banks (name, description, subscription_id, remote_id) VALUES (?, ?, ?, ?)',
+            bank.name, new Date().toISOString(), subscriptionId, remoteId
+        );
+        return { bankId: result.lastInsertRowId, hasChanges: true };
+    },
+
     async _saveBanks(subscriptionId: number, banks: RemoteBank[], isFallback: boolean = false, verbose: boolean = false) {
         const db = getDB();
         if (banks.length === 0) return;
@@ -705,68 +739,16 @@ export const SubscriptionService = {
             }
 
             for (const bank of banks) {
-                const remoteId = bank.id || bank.name;
+                // 使用辅助方法创建/更新题库
+                const { bankId, hasChanges } = await this._upsertBank(db, subscriptionId, bank);
 
-                const existing: any = await db.getFirstAsync(
-                    'SELECT id, name, description FROM question_banks WHERE subscription_id = ? AND remote_id = ?',
-                    subscriptionId, remoteId
-                );
-
-                let bankId: number;
-                let hasChanges = false;
-
-                if (existing) {
-                    bankId = existing.id;
-
-                    // 检测题库名称是否变化
-                    if (existing.name !== bank.name) {
-                        hasChanges = true;
-                    }
-
-                    // 检测题目数量和内容是否变化
-                    const existingQuestionCount: any = await db.getFirstAsync(
-                        'SELECT COUNT(*) as count FROM questions WHERE bank_id = ?',
-                        bankId
-                    );
-
-                    if (existingQuestionCount.count !== bank.questions.length) {
-                        hasChanges = true;
-                    }
-
-                    // 只有发生变化时才更新，并更新时间戳
-                    if (hasChanges) {
-                        const syncDesc = new Date().toISOString();
-                        await db.runAsync(
-                            'UPDATE question_banks SET name = ?, description = ? WHERE id = ?',
-                            bank.name, syncDesc, bankId
-                        );
-                    } else {
-                        // 没有变化，只更新名称（以防名称更新），保持原时间戳
-                        await db.runAsync(
-                            'UPDATE question_banks SET name = ? WHERE id = ?',
-                            bank.name, bankId
-                        );
-                    }
-                } else {
-                    // 新题库，设置初始时间戳
-                    hasChanges = true;
-                    const syncDesc = new Date().toISOString();
-                    const result: any = await db.runAsync(
-                        'INSERT INTO question_banks (name, description, subscription_id, remote_id) VALUES (?, ?, ?, ?)',
-                        bank.name, syncDesc, subscriptionId, remoteId
-                    );
-                    bankId = result.lastInsertRowId;
-                }
-
-                // 使用辅助函数处理题目同步
+                // 同步题目
                 const questionsChanged = await this._syncQuestionsForBank(db, bankId, bank.questions);
 
-                // 如果题目层发生了变化，更新题库的时间戳
+                // 如果题目层发生了变化但题库层没有变化，更新题库时间戳
                 if (questionsChanged && !hasChanges) {
-                    await db.runAsync(
-                        'UPDATE question_banks SET description = ? WHERE id = ?',
-                        new Date().toISOString(), bankId
-                    );
+                    await db.runAsync('UPDATE question_banks SET description = ? WHERE id = ?',
+                        new Date().toISOString(), bankId);
                 }
             } // end for bank of banks
         } // end if shouldCleanBanks
